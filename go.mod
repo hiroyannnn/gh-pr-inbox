@@ -1,6 +1,6 @@
 module github.com/hiroyannnn/gh-pr-inbox
 
-go 1.24.11
+go 1.21
 
 require github.com/spf13/cobra v1.10.2
 

@@ -92,7 +92,7 @@ gh pr-inbox --format json
 ## Requirements
 
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-- Go 1.19 or higher (for building from source)
+- Go 1.21 or higher (for building from source)
 
 ## License
 

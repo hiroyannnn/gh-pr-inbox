@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 )
 
 // Client handles GitHub API interactions via gh CLI
@@ -108,55 +107,4 @@ func (c *Client) runGHCommand(args ...string) ([]byte, error) {
 		return nil, fmt.Errorf("gh command failed: %w\nOutput: %s", err, string(output))
 	}
 	return output, nil
-}
-
-// IsResolved checks if a comment thread appears to be resolved
-// This is a heuristic based on common patterns in review comments
-func IsResolved(comment ReviewComment, allComments []ReviewComment) bool {
-	// Find all comments in the same thread
-	threadComments := findThreadComments(comment, allComments)
-
-	// Check for resolution indicators in thread
-	for _, c := range threadComments {
-		body := strings.ToLower(c.Body)
-		// Look for common resolution phrases
-		if strings.Contains(body, "resolved") ||
-			strings.Contains(body, "fixed") ||
-			strings.Contains(body, "done") ||
-			strings.Contains(body, "addressed") {
-			return true
-		}
-	}
-
-	return false
-}
-
-// findThreadComments finds all comments in the same thread
-func findThreadComments(comment ReviewComment, allComments []ReviewComment) []ReviewComment {
-	var thread []ReviewComment
-
-	// Add the comment itself
-	thread = append(thread, comment)
-
-	// Find replies (comments with inReplyToId matching this comment)
-	for _, c := range allComments {
-		if c.InReplyToID == comment.ID {
-			thread = append(thread, c)
-		}
-	}
-
-	// If this comment is a reply, find the parent and siblings
-	if comment.InReplyToID > 0 {
-		for _, c := range allComments {
-			if c.ID == comment.InReplyToID {
-				// Found parent, add it
-				thread = append(thread, c)
-			} else if c.InReplyToID == comment.InReplyToID {
-				// Found sibling reply
-				thread = append(thread, c)
-			}
-		}
-	}
-
-	return thread
 }
