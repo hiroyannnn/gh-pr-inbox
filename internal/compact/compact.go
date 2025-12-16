@@ -94,8 +94,9 @@ func determinePriority(thread model.Thread, body string) string {
 
 func condense(body string) string {
 	body = strings.TrimSpace(body)
-	if len(body) > 220 {
-		return body[:217] + "..."
+	runes := []rune(body)
+	if len(runes) > 220 {
+		return string(runes[:217]) + "..."
 	}
 	return body
 }

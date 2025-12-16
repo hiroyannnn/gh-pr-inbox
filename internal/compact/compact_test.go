@@ -93,9 +93,46 @@ func TestCompact_CondenseText(t *testing.T) {
 	items := compactor.Compact(threads)
 
 	if items[0].Summary != strings.Repeat("a", 217)+"..." {
-		t.Fatalf("expected summary condensed to 220 chars, got %q", items[0].Summary)
+		t.Fatalf("expected summary condensed to 220 runes, got %q", items[0].Summary)
 	}
 	if items[0].Latest != "final" {
 		t.Fatalf("expected latest reply to be kept, got %q", items[0].Latest)
 	}
+}
+
+func TestCompact_CondenseText_WithMultibyteChars(t *testing.T) {
+	// Test with emojis and multi-byte characters
+	longTextWithEmojis := strings.Repeat("🎉", 230) // Each emoji is multiple bytes
+	threads := []model.Thread{
+		{
+			ID:       "t1",
+			FilePath: "foo.go",
+			Line:     3,
+			Comments: []model.Comment{
+				{Body: longTextWithEmojis},
+			},
+		},
+	}
+
+	compactor := New(Options{})
+	items := compactor.Compact(threads)
+
+	expected := strings.Repeat("🎉", 217) + "..."
+	if items[0].Summary != expected {
+		t.Fatalf("expected summary with emojis condensed to 220 runes, got %q (len=%d runes)", items[0].Summary, len([]rune(items[0].Summary)))
+	}
+
+	// Verify the result is valid UTF-8
+	if !isValidUTF8(items[0].Summary) {
+		t.Fatalf("condensed summary is not valid UTF-8")
+	}
+}
+
+func isValidUTF8(s string) bool {
+	for _, r := range s {
+		if r == '\uFFFD' { // Unicode replacement character indicates invalid UTF-8
+			return false
+		}
+	}
+	return true
 }
