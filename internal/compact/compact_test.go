@@ -28,7 +28,7 @@ func TestCompact_FiltersResolvedAndAssignsPriority(t *testing.T) {
 		},
 	}
 
-	compactor := New(Options{IncludeResolved: false, ReplyBudget: 1})
+	compactor := New(Options{IncludeResolved: false})
 	items := compactor.Compact(threads)
 
 	if len(items) != 1 {
@@ -62,7 +62,7 @@ func TestCompact_PriorityFilteringAndOrdering(t *testing.T) {
 		},
 	}
 
-	compactor := New(Options{PriorityOnly: "P0", ReplyBudget: 1})
+	compactor := New(Options{PriorityOnly: "P0"})
 	items := compactor.Compact(threads)
 
 	if len(items) != 1 {
@@ -76,7 +76,7 @@ func TestCompact_PriorityFilteringAndOrdering(t *testing.T) {
 	}
 }
 
-func TestCompact_ReplyBudgetClamp(t *testing.T) {
+func TestCompact_CondenseText(t *testing.T) {
 	threads := []model.Thread{
 		{
 			ID:       "t1",
@@ -89,13 +89,13 @@ func TestCompact_ReplyBudgetClamp(t *testing.T) {
 		},
 	}
 
-	compactor := New(Options{ReplyBudget: 2})
+	compactor := New(Options{})
 	items := compactor.Compact(threads)
 
 	if items[0].Summary != strings.Repeat("a", 217)+"..." {
-		t.Fatalf("expected summary condensed to budget, got %q", items[0].Summary)
+		t.Fatalf("expected summary condensed to 220 chars, got %q", items[0].Summary)
 	}
 	if items[0].Latest != "final" {
-		t.Fatalf("expected latest reply kept when budget allows, got %q", items[0].Latest)
+		t.Fatalf("expected latest reply to be kept, got %q", items[0].Latest)
 	}
 }

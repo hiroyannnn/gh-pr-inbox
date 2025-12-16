@@ -11,7 +11,6 @@ import (
 type Options struct {
 	IncludeResolved bool
 	PriorityOnly    string
-	ReplyBudget     int
 }
 
 // Compactor transforms threads into prioritized inbox items.
@@ -106,19 +105,6 @@ func chooseURL(thread model.Thread, latest model.Comment) string {
 		return latest.URL
 	}
 	return thread.URL
-}
-
-func clamp(val, min, max int) int {
-	if val == 0 {
-		return max
-	}
-	if val < min {
-		return min
-	}
-	if val > max {
-		return max
-	}
-	return val
 }
 
 func priorityRank(p string) int {

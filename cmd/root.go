@@ -101,7 +101,6 @@ func runInbox(cmd *cobra.Command, args []string) error {
 	compactor := compact.New(compact.Options{
 		IncludeResolved: includeAll,
 		PriorityOnly:    priorityFilter(),
-		ReplyBudget:     1,
 	})
 	items := compactor.Compact(threads)
 	if budget > 0 && len(items) > budget {
@@ -118,24 +117,29 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		return nil
 	default:
 		md := render.Markdown(meta, items)
-		prompt := resolvePrompt(cfg, md, items, meta)
+		prompt, err := resolvePrompt(cfg, md, items, meta)
+		if err != nil {
+			return err
+		}
 		fmt.Print(prompt)
 		return nil
 	}
 }
 
-func resolvePrompt(cfg *config.Config, md string, items []model.InboxItem, meta *model.PRMeta) string {
+func resolvePrompt(cfg *config.Config, md string, items []model.InboxItem, meta *model.PRMeta) (string, error) {
 	prompt := cfg.Prompt
 	if promptFile != "" {
-		if data, err := os.ReadFile(promptFile); err == nil {
-			prompt = string(data)
+		data, err := os.ReadFile(promptFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt file %q: %w", promptFile, err)
 		}
+		prompt = string(data)
 	}
 	if promptInline != "" {
 		prompt = promptInline
 	}
 	if prompt == "" {
-		return md
+		return md, nil
 	}
 
 	vars := map[string]string{
@@ -147,7 +151,7 @@ func resolvePrompt(cfg *config.Config, md string, items []model.InboxItem, meta 
 		"THREADS_MD":   md,
 		"THREADS_JSON": marshalItems(items),
 	}
-	return template.Apply(prompt, vars)
+	return template.Apply(prompt, vars), nil
 }
 
 func marshalItems(items []model.InboxItem) string {

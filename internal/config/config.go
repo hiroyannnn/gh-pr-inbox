@@ -15,8 +15,12 @@ type Config struct {
 // Load merges global and repo config files.
 func Load(repoRoot string) (*Config, error) {
 	cfg := &Config{}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
 	paths := []string{
-		filepath.Join(os.Getenv("HOME"), ".config", "gh", "pr-inbox.yml"),
+		filepath.Join(home, ".config", "gh", "pr-inbox.yml"),
 		filepath.Join(repoRoot, ".github", "pr-inbox.yml"),
 	}
 	for _, path := range paths {
