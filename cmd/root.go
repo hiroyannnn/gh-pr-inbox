@@ -1,0 +1,189 @@
+package cmd
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+
+	"github.com/hiroyannnn/gh-pr-inbox/internal/compact"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/config"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/github"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/model"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/render"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/template"
+	"github.com/spf13/cobra"
+)
+
+var (
+	repository   string
+	prNumber     int
+	format       string
+	includeAll   bool
+	onlyP0       bool
+	budget       int
+	promptFile   string
+	promptInline string
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "pr-inbox [PR_NUMBER]",
+	Short: "Collect and organize PR review comments into an actionable inbox",
+	Long: `gh pr-inbox collects PR review comments, groups them into threads,
+filters unresolved issues, prioritizes them, and outputs a compact,
+actionable inbox for the PR author.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runInbox,
+}
+
+// Execute runs the CLI.
+func Execute() error { return rootCmd.Execute() }
+
+func init() {
+	rootCmd.Flags().StringVarP(&repository, "repo", "R", "", "Repository in OWNER/REPO format")
+	rootCmd.Flags().IntVarP(&prNumber, "pr", "p", 0, "Pull request number")
+	rootCmd.Flags().StringVarP(&format, "format", "f", "md", "Output format: md or json")
+	rootCmd.Flags().BoolVar(&includeAll, "all", false, "Include resolved threads as well")
+	rootCmd.Flags().BoolVar(&onlyP0, "p0", false, "Show only P0 items")
+	rootCmd.Flags().IntVar(&budget, "budget", 0, "Limit number of threads (0 = unlimited)")
+	rootCmd.Flags().StringVar(&promptFile, "prompt-file", "", "Optional prompt template file")
+	rootCmd.Flags().StringVar(&promptInline, "prompt", "", "Inline prompt template override")
+}
+
+func runInbox(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		var err error
+		prNumber, err = strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid PR number '%s': must be a valid integer", args[0])
+		}
+	}
+
+	if prNumber == 0 {
+		var err error
+		prNumber, err = getCurrentPRNumber()
+		if err != nil || prNumber == 0 {
+			return fmt.Errorf("PR number required: specify with argument, --pr flag, or run from a PR branch")
+		}
+	}
+
+	if repository == "" {
+		var err error
+		repository, err = getCurrentRepository()
+		if err != nil {
+			return fmt.Errorf("repository required: specify with --repo flag or run from a git repository")
+		}
+	}
+
+	repoRoot, _ := os.Getwd()
+	cfg, err := config.Load(repoRoot)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	client, err := github.NewClient(repository)
+	if err != nil {
+		return err
+	}
+
+	meta, err := client.GetPRMeta(prNumber)
+	if err != nil {
+		return fmt.Errorf("failed to fetch PR metadata: %w", err)
+	}
+
+	threads, err := client.GetReviewThreads(prNumber)
+	if err != nil {
+		return fmt.Errorf("failed to fetch review threads: %w", err)
+	}
+
+	compactor := compact.New(compact.Options{
+		IncludeResolved: includeAll,
+		PriorityOnly:    priorityFilter(),
+	})
+	items := compactor.Compact(threads)
+	if budget > 0 && len(items) > budget {
+		items = items[:budget]
+	}
+
+	switch format {
+	case "json":
+		out, err := render.JSON(meta, items)
+		if err != nil {
+			return err
+		}
+		fmt.Println(out)
+		return nil
+	default:
+		md := render.Markdown(meta, items)
+		prompt, err := resolvePrompt(cfg, md, items, meta)
+		if err != nil {
+			return err
+		}
+		fmt.Print(prompt)
+		return nil
+	}
+}
+
+func resolvePrompt(cfg *config.Config, md string, items []model.InboxItem, meta *model.PRMeta) (string, error) {
+	prompt := cfg.Prompt
+	if promptFile != "" {
+		data, err := os.ReadFile(promptFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt file %q: %w", promptFile, err)
+		}
+		prompt = string(data)
+	}
+	if promptInline != "" {
+		prompt = promptInline
+	}
+	if prompt == "" {
+		return md, nil
+	}
+
+	vars := map[string]string{
+		"REPO":         meta.Repo,
+		"PR_NUMBER":    strconv.Itoa(meta.Number),
+		"PR_TITLE":     meta.Title,
+		"PR_URL":       meta.URL,
+		"PR_GOAL":      meta.Goal,
+		"THREADS_MD":   md,
+		"THREADS_JSON": marshalItems(items),
+	}
+	return template.Apply(prompt, vars), nil
+}
+
+func marshalItems(items []model.InboxItem) string {
+	out, _ := json.Marshal(items)
+	return string(out)
+}
+
+func priorityFilter() string {
+	if onlyP0 {
+		return "P0"
+	}
+	return ""
+}
+
+func getCurrentRepository() (string, error) {
+	cmd := exec.Command("gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func getCurrentPRNumber() (int, error) {
+	cmd := exec.Command("gh", "pr", "view", "--json", "number", "-q", ".number")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+	prNum, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse PR number: %w", err)
+	}
+	return prNum, nil
+}
