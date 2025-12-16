@@ -2,6 +2,7 @@ package inbox
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -13,6 +14,9 @@ const (
 	PriorityHigh   = "🔴 HIGH"
 	PriorityMedium = "🟡 MEDIUM"
 	PriorityLow    = "🟢 LOW"
+
+	// HighPriorityThreadThreshold is the number of unresolved comments that triggers high priority
+	HighPriorityThreadThreshold = 3
 )
 
 // InboxItem represents a single item in the PR inbox
@@ -105,6 +109,9 @@ func (p *Processor) filterUnresolved(threads map[string][]github.ReviewComment, 
 
 // isThreadResolved checks if a thread appears to be resolved
 func (p *Processor) isThreadResolved(threadComments []github.ReviewComment) bool {
+	// Regex pattern to match "done" as a whole word
+	donePattern := regexp.MustCompile(`\bdone\b`)
+
 	// Check for resolution indicators
 	for _, comment := range threadComments {
 		body := strings.ToLower(comment.Body)
@@ -113,10 +120,7 @@ func (p *Processor) isThreadResolved(threadComments []github.ReviewComment) bool
 		if strings.Contains(body, "✅") ||
 			strings.Contains(body, "resolved") ||
 			strings.Contains(body, "fixed") ||
-			strings.Contains(body, "done ") ||
-			strings.Contains(body, " done") ||
-			strings.HasSuffix(body, "done") ||
-			strings.HasPrefix(body, "done") ||
+			donePattern.MatchString(body) ||
 			strings.Contains(body, "addressed") ||
 			strings.Contains(body, "closing") {
 			return true
@@ -197,7 +201,7 @@ func (p *Processor) determinePriority(item *InboxItem) string {
 	}
 
 	// Multiple unresolved comments in thread increases priority
-	if item.UnresolvedCount > 3 {
+	if item.UnresolvedCount > HighPriorityThreadThreshold {
 		return PriorityHigh
 	}
 

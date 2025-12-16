@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/hiroyannnn/gh-pr-inbox/internal/github"
@@ -43,7 +44,11 @@ func Execute() error {
 func runInbox(cmd *cobra.Command, args []string) error {
 	// Determine PR number
 	if len(args) > 0 {
-		fmt.Sscanf(args[0], "%d", &prNumber)
+		var err error
+		prNumber, err = strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("invalid PR number '%s': must be a valid integer", args[0])
+		}
 	}
 
 	if prNumber == 0 {
@@ -103,8 +108,10 @@ func getCurrentPRNumber() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	var prNum int
-	fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &prNum)
+	prNum, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse PR number: %w", err)
+	}
 	return prNum, nil
 }
 
