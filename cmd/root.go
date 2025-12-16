@@ -8,41 +8,51 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hiroyannnn/gh-pr-inbox/internal/compact"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/config"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/github"
-	"github.com/hiroyannnn/gh-pr-inbox/internal/inbox"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/model"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/render"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/template"
 	"github.com/spf13/cobra"
 )
 
 var (
-	repository string
-	prNumber   int
-	format     string
+	repository   string
+	prNumber     int
+	format       string
+	includeAll   bool
+	onlyP0       bool
+	budget       int
+	promptFile   string
+	promptInline string
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "pr-inbox [PR_NUMBER]",
 	Short: "Collect and organize PR review comments into an actionable inbox",
 	Long: `gh pr-inbox collects PR review comments, groups them into threads,
-filters unresolved issues, prioritizes them, and outputs a clean,
-actionable "Inbox" for the PR author.
-
-The purpose is to reduce review noise and make it easy to decide what to fix next.`,
+filters unresolved issues, prioritizes them, and outputs a compact,
+actionable inbox for the PR author.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runInbox,
 }
 
+// Execute runs the CLI.
+func Execute() error { return rootCmd.Execute() }
+
 func init() {
 	rootCmd.Flags().StringVarP(&repository, "repo", "R", "", "Repository in OWNER/REPO format")
 	rootCmd.Flags().IntVarP(&prNumber, "pr", "p", 0, "Pull request number")
-	rootCmd.Flags().StringVarP(&format, "format", "f", "default", "Output format (default, json)")
-}
-
-func Execute() error {
-	return rootCmd.Execute()
+	rootCmd.Flags().StringVarP(&format, "format", "f", "md", "Output format: md or json")
+	rootCmd.Flags().BoolVar(&includeAll, "all", false, "Include resolved threads as well")
+	rootCmd.Flags().BoolVar(&onlyP0, "p0", false, "Show only P0 items")
+	rootCmd.Flags().IntVar(&budget, "budget", 0, "Limit number of threads (0 = unlimited)")
+	rootCmd.Flags().StringVar(&promptFile, "prompt-file", "", "Optional prompt template file")
+	rootCmd.Flags().StringVar(&promptInline, "prompt", "", "Inline prompt template override")
 }
 
 func runInbox(cmd *cobra.Command, args []string) error {
-	// Determine PR number
 	if len(args) > 0 {
 		var err error
 		prNumber, err = strconv.Atoi(args[0])
@@ -52,7 +62,6 @@ func runInbox(cmd *cobra.Command, args []string) error {
 	}
 
 	if prNumber == 0 {
-		// Try to get PR number from current branch
 		var err error
 		prNumber, err = getCurrentPRNumber()
 		if err != nil || prNumber == 0 {
@@ -60,7 +69,6 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Determine repository
 	if repository == "" {
 		var err error
 		repository, err = getCurrentRepository()
@@ -69,28 +77,89 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Fetch PR data
-	client := github.NewClient(repository)
-	pr, err := client.GetPullRequest(prNumber)
+	repoRoot, _ := os.Getwd()
+	cfg, err := config.Load(repoRoot)
 	if err != nil {
-		return fmt.Errorf("failed to fetch PR: %w", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Collect review comments
-	comments, err := client.GetReviewComments(prNumber)
+	client, err := github.NewClient(repository)
 	if err != nil {
-		return fmt.Errorf("failed to fetch review comments: %w", err)
+		return err
 	}
 
-	// Process and organize into inbox
-	processor := inbox.NewProcessor()
-	inboxItems := processor.Process(pr, comments)
-
-	// Output results
-	if format == "json" {
-		return outputJSON(inboxItems)
+	meta, err := client.GetPRMeta(prNumber)
+	if err != nil {
+		return fmt.Errorf("failed to fetch PR metadata: %w", err)
 	}
-	return outputDefault(inboxItems)
+
+	threads, err := client.GetReviewThreads(prNumber)
+	if err != nil {
+		return fmt.Errorf("failed to fetch review threads: %w", err)
+	}
+
+	compactor := compact.New(compact.Options{
+		IncludeResolved: includeAll,
+		PriorityOnly:    priorityFilter(),
+		ReplyBudget:     1,
+	})
+	items := compactor.Compact(threads)
+	if budget > 0 && len(items) > budget {
+		items = items[:budget]
+	}
+
+	switch format {
+	case "json":
+		out, err := render.JSON(meta, items)
+		if err != nil {
+			return err
+		}
+		fmt.Println(out)
+		return nil
+	default:
+		md := render.Markdown(meta, items)
+		prompt := resolvePrompt(cfg, md, items, meta)
+		fmt.Print(prompt)
+		return nil
+	}
+}
+
+func resolvePrompt(cfg *config.Config, md string, items []model.InboxItem, meta *model.PRMeta) string {
+	prompt := cfg.Prompt
+	if promptFile != "" {
+		if data, err := os.ReadFile(promptFile); err == nil {
+			prompt = string(data)
+		}
+	}
+	if promptInline != "" {
+		prompt = promptInline
+	}
+	if prompt == "" {
+		return md
+	}
+
+	vars := map[string]string{
+		"REPO":         meta.Repo,
+		"PR_NUMBER":    strconv.Itoa(meta.Number),
+		"PR_TITLE":     meta.Title,
+		"PR_URL":       meta.URL,
+		"PR_GOAL":      meta.Goal,
+		"THREADS_MD":   md,
+		"THREADS_JSON": marshalItems(items),
+	}
+	return template.Apply(prompt, vars)
+}
+
+func marshalItems(items []model.InboxItem) string {
+	out, _ := json.Marshal(items)
+	return string(out)
+}
+
+func priorityFilter() string {
+	if onlyP0 {
+		return "P0"
+	}
+	return ""
 }
 
 func getCurrentRepository() (string, error) {
@@ -113,42 +182,4 @@ func getCurrentPRNumber() (int, error) {
 		return 0, fmt.Errorf("failed to parse PR number: %w", err)
 	}
 	return prNum, nil
-}
-
-func outputJSON(items []inbox.InboxItem) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(items)
-}
-
-func outputDefault(items []inbox.InboxItem) error {
-	if len(items) == 0 {
-		fmt.Println("🎉 Your PR inbox is empty! No unresolved review comments.")
-		return nil
-	}
-
-	fmt.Printf("📬 PR Review Inbox (%d items)\n", len(items))
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println()
-
-	for i, item := range items {
-		fmt.Printf("[%d] %s\n", i+1, item.Priority)
-		fmt.Printf("    Thread: %s\n", item.ThreadID)
-		fmt.Printf("    File: %s:%d\n", item.FilePath, item.LineNumber)
-		fmt.Printf("    Author: %s\n", item.Author)
-		fmt.Printf("    Comment: %s\n", truncate(item.Body, 80))
-		if item.UnresolvedCount > 1 {
-			fmt.Printf("    Thread has %d unresolved comments\n", item.UnresolvedCount)
-		}
-		fmt.Println()
-	}
-
-	return nil
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
 }
