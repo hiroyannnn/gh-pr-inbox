@@ -27,6 +27,7 @@ var (
 	includeDiff  bool
 	includeTimes bool
 	allComments  bool
+	includeIssue bool
 	promptFile   string
 	promptInline string
 )
@@ -54,6 +55,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&includeDiff, "include-diff", false, "Include diff context for each thread")
 	rootCmd.Flags().BoolVar(&includeTimes, "include-times", false, "Include comment timestamps")
 	rootCmd.Flags().BoolVar(&allComments, "all-comments", false, "Include all comments for each thread (not just first/latest)")
+	rootCmd.Flags().BoolVar(&includeIssue, "include-issue-comments", false, "Include PR conversation (issue) comments")
 	rootCmd.Flags().StringVar(&promptFile, "prompt-file", "", "Optional prompt template file")
 	rootCmd.Flags().StringVar(&promptInline, "prompt", "", "Inline prompt template override")
 }
@@ -102,6 +104,14 @@ func runInbox(cmd *cobra.Command, args []string) error {
 	threads, err := client.GetReviewThreads(prNumber)
 	if err != nil {
 		return fmt.Errorf("failed to fetch review threads: %w", err)
+	}
+
+	if includeIssue {
+		issueThreads, err := client.GetIssueCommentThreads(prNumber)
+		if err != nil {
+			return fmt.Errorf("failed to fetch issue comments: %w", err)
+		}
+		threads = append(threads, issueThreads...)
 	}
 
 	compactor := compact.New(compact.Options{

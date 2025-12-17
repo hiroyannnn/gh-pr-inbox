@@ -1,7 +1,8 @@
 GOFMT_TARGETS := ./cmd ./internal ./main.go
 MODULE_FILES := go.mod go.sum
 GOCACHE ?= $(CURDIR)/.cache/go-build
-GOENV := env GOCACHE="$(GOCACHE)"
+GOMODCACHE ?= $(CURDIR)/.cache/go-mod
+GOENV := env GOCACHE="$(GOCACHE)" GOMODCACHE="$(GOMODCACHE)"
 
 .PHONY: all clean help fmt fmt-check tidy tidy-check vet test lint build ci install-local reinstall-local reinstall-prod release delete-tag
 

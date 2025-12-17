@@ -12,7 +12,7 @@ func TestClient_GetPRMeta_PassesVariablesAsFields(t *testing.T) {
 	var gotArgs []string
 	execGH = func(args ...string) ([]byte, error) {
 		gotArgs = append([]string(nil), args...)
-		return []byte(`{"data":{"repository":{"pullRequest":{"number":123,"title":"t","url":"u","bodyText":"b"}}}}`), nil
+		return []byte(`{"data":{"repository":{"pullRequest":{"number":123,"title":"t","url":"u","bodyText":"line1\n\n--include-diff: show diff context\n--include-times: show timestamps\nline2"}}}}`), nil
 	}
 
 	client, err := NewClient("octo/repo")
@@ -35,6 +35,32 @@ func TestClient_GetPRMeta_PassesVariablesAsFields(t *testing.T) {
 		if strings.HasPrefix(a, "variables=") {
 			t.Fatalf("unexpected variables= arg: %q", a)
 		}
+	}
+}
+
+func TestClient_GetPRMeta_StripsHelpLikeFlagLinesFromGoal(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	execGH = func(args ...string) ([]byte, error) {
+		return []byte(`{"data":{"repository":{"pullRequest":{"number":123,"title":"t","url":"u","bodyText":"Line A\n\n--flag-a: A\n--flag-b: B\n\nLine B"}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	meta, err := client.GetPRMeta(123)
+	if err != nil {
+		t.Fatalf("GetPRMeta: %v", err)
+	}
+
+	if strings.Contains(meta.Goal, "--flag-a") || strings.Contains(meta.Goal, "--flag-b") {
+		t.Fatalf("expected goal to not include flag-like lines, got: %q", meta.Goal)
+	}
+	if !strings.Contains(meta.Goal, "Line A") || !strings.Contains(meta.Goal, "Line B") {
+		t.Fatalf("expected goal to keep non-flag lines, got: %q", meta.Goal)
 	}
 }
 
@@ -80,6 +106,51 @@ func TestClient_GetReviewThreads_IncludesAfterCursorOnSecondPage(t *testing.T) {
 	}
 	if strings.Count(gotQuery, "diffHunk") != 1 {
 		t.Fatalf("expected diffHunk to appear once in query, got %d", strings.Count(gotQuery, "diffHunk"))
+	}
+}
+
+func TestClient_GetIssueCommentThreads_IncludesAfterCursorOnSecondPage(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	var calls [][]string
+	var gotQuery string
+	execGH = func(args ...string) ([]byte, error) {
+		calls = append(calls, append([]string(nil), args...))
+		if gotQuery == "" {
+			gotQuery = queryArg(args)
+		}
+		if len(calls) == 1 {
+			return []byte(`{"data":{"repository":{"pullRequest":{"comments":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"CUR1"}}}}}}`), nil
+		}
+		return []byte(`{"data":{"repository":{"pullRequest":{"comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	if _, err := client.GetIssueCommentThreads(123); err != nil {
+		t.Fatalf("GetIssueCommentThreads: %v", err)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 GraphQL calls, got %d", len(calls))
+	}
+
+	if hasArg(calls[0], "after=CUR1") {
+		t.Fatalf("did not expect after=CUR1 on first call")
+	}
+	if !hasArg(calls[1], "after=CUR1") {
+		t.Fatalf("expected after=CUR1 on second call")
+	}
+
+	if gotQuery == "" {
+		t.Fatalf("expected query arg to be passed")
+	}
+	if !strings.Contains(gotQuery, "comments(first:100") {
+		t.Fatalf("expected comments query, got: %s", gotQuery)
 	}
 }
 

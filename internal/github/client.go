@@ -68,10 +68,7 @@ bodyText
 	}
 
 	pr := parsed.Data.Repository.PullRequest
-	goal := pr.BodyText
-	if len(goal) > 400 {
-		goal = goal[:400]
-	}
+	goal := sanitizeGoal(pr.BodyText, 400)
 
 	return &model.PRMeta{
 		Number: pr.Number,
@@ -80,6 +77,51 @@ bodyText
 		Goal:   goal,
 		Repo:   c.repository,
 	}, nil
+}
+
+func sanitizeGoal(body string, limitRunes int) string {
+	lines := strings.Split(body, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+		if trimmed == "Usage:" || trimmed == "Flags:" || trimmed == "Options:" {
+			continue
+		}
+		kept = append(kept, strings.TrimRight(line, " \t"))
+	}
+
+	out := strings.TrimSpace(strings.Join(kept, "\n"))
+	out = collapseBlankLines(out)
+	return truncateRunes(out, limitRunes)
+}
+
+func collapseBlankLines(s string) string {
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	previousBlank := false
+	for _, line := range lines {
+		blank := strings.TrimSpace(line) == ""
+		if blank && previousBlank {
+			continue
+		}
+		out = append(out, line)
+		previousBlank = blank
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func truncateRunes(s string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit])
 }
 
 // GetReviewThreads fetches review threads for the PR using GraphQL.
@@ -191,6 +233,99 @@ pageInfo { hasNextPage endCursor }
 
 		if rt.PageInfo.HasNextPage {
 			cursor = &rt.PageInfo.EndCursor
+			continue
+		}
+		break
+	}
+
+	return threads, nil
+}
+
+// GetIssueCommentThreads fetches PR conversation (issue) comments and represents each as a thread-like item.
+func (c *Client) GetIssueCommentThreads(prNumber int) ([]model.Thread, error) {
+	var threads []model.Thread
+	var cursor *string
+
+	query := `query($owner:String!, $name:String!, $number:Int!, $after:String) {
+repository(owner:$owner, name:$name) {
+pullRequest(number:$number) {
+comments(first:100, after:$after) {
+nodes {
+id
+databaseId
+body
+author { login }
+createdAt
+url
+}
+pageInfo { hasNextPage endCursor }
+}
+}
+}
+}`
+
+	for {
+		variables := map[string]any{"owner": c.owner, "name": c.name, "number": prNumber}
+		if cursor != nil {
+			variables["after"] = *cursor
+		}
+
+		resp, err := c.runGraphQL(query, variables)
+		if err != nil {
+			return nil, err
+		}
+
+		var parsed struct {
+			Data struct {
+				Repository struct {
+					PullRequest struct {
+						Comments struct {
+							Nodes []struct {
+								ID         string `json:"id"`
+								DatabaseID int64  `json:"databaseId"`
+								Body       string `json:"body"`
+								Author     struct {
+									Login string `json:"login"`
+								} `json:"author"`
+								CreatedAt string `json:"createdAt"`
+								URL       string `json:"url"`
+							} `json:"nodes"`
+							PageInfo struct {
+								HasNextPage bool   `json:"hasNextPage"`
+								EndCursor   string `json:"endCursor"`
+							} `json:"pageInfo"`
+						} `json:"comments"`
+					} `json:"pullRequest"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+
+		if err := json.Unmarshal(resp, &parsed); err != nil {
+			return nil, fmt.Errorf("failed to parse issue comments: %w", err)
+		}
+
+		pc := parsed.Data.Repository.PullRequest.Comments
+		for _, node := range pc.Nodes {
+			comment := model.Comment{
+				ID:        fmt.Sprintf("%d", node.DatabaseID),
+				Body:      node.Body,
+				Author:    node.Author.Login,
+				CreatedAt: node.CreatedAt,
+				URL:       node.URL,
+			}
+
+			threads = append(threads, model.Thread{
+				ID:       "IC_" + node.ID,
+				FilePath: "PR conversation",
+				Line:     0,
+				Resolved: false,
+				Comments: []model.Comment{comment},
+				URL:      node.URL,
+			})
+		}
+
+		if pc.PageInfo.HasNextPage {
+			cursor = &pc.PageInfo.EndCursor
 			continue
 		}
 		break

@@ -56,6 +56,11 @@ gh pr-inbox --format json
 gh pr-inbox --include-diff --include-times --all-comments
 ```
 
+### Include PR conversation comments
+```bash
+gh pr-inbox --include-issue-comments
+```
+
 ## Features
 
 - **Thread Grouping**: Automatically groups review comments into conversation threads

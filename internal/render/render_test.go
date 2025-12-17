@@ -70,6 +70,7 @@ func TestMarkdownRendersVerboseFields(t *testing.T) {
 	out := Markdown(meta, items)
 
 	required := []string{
+		"- [P0] L12 by alice — must fix",
 		"- Created: 2025-01-01T00:00:00Z",
 		"- Updated: 2025-01-02T00:00:00Z",
 		"- Diff:",
@@ -82,5 +83,20 @@ func TestMarkdownRendersVerboseFields(t *testing.T) {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("expected markdown to contain %q", expected)
 		}
+	}
+}
+
+func TestMarkdownOmitsLineNumberWhenZero(t *testing.T) {
+	meta := &model.PRMeta{Repo: "acme/widgets", Number: 42, Title: "Add feature", URL: "http://example.com"}
+	items := []model.InboxItem{
+		{ThreadID: "t1", Priority: "P1", FilePath: "PR conversation", LineNumber: 0, Author: "alice", Summary: "nit", Latest: "nit", URL: "u1"},
+	}
+
+	out := Markdown(meta, items)
+	if strings.Contains(out, "L0") {
+		t.Fatalf("expected markdown to omit line number when zero: %s", out)
+	}
+	if !strings.Contains(out, "- [P1] by alice — nit") {
+		t.Fatalf("expected markdown to contain issue comment style line: %s", out)
 	}
 }

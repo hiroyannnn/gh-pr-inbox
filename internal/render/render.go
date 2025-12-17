@@ -34,7 +34,11 @@ func Markdown(meta *model.PRMeta, items []model.InboxItem) string {
 	for _, file := range files {
 		fmt.Fprintf(builder, "## %s\n\n", file)
 		for _, item := range grouped[file] {
-			fmt.Fprintf(builder, "- [%s] L%d by %s — %s\n", item.Priority, item.LineNumber, item.Author, item.Summary)
+			if item.LineNumber > 0 {
+				fmt.Fprintf(builder, "- [%s] L%d by %s — %s\n", item.Priority, item.LineNumber, item.Author, item.Summary)
+			} else {
+				fmt.Fprintf(builder, "- [%s] by %s — %s\n", item.Priority, item.Author, item.Summary)
+			}
 			fmt.Fprintf(builder, "  - Latest: %s\n", item.Latest)
 			if item.RootCreatedAt != "" {
 				fmt.Fprintf(builder, "  - Created: %s\n", item.RootCreatedAt)
