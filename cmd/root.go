@@ -74,13 +74,6 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	var updateCh <-chan string
-	if !noUpdateCheck {
-		// Start this early so it can run in the background while we fetch PR data.
-		// We only read it later with TryReceive to avoid delaying output (especially JSON).
-		updateCh = updatecheck.Start(buildinfo.Version)
-	}
-
 	prFromArg := false
 	if len(args) > 0 {
 		var err error
@@ -92,6 +85,13 @@ func runInbox(cmd *cobra.Command, args []string) error {
 	}
 
 	applyConfigDefaults(cmd, cfg, prFromArg)
+
+	var updateCh <-chan string
+	if !noUpdateCheck {
+		// Start this early so it can run in the background while we fetch PR data.
+		// We only read it later with TryReceive to avoid delaying output (especially JSON).
+		updateCh = updatecheck.Start(buildinfo.Version)
+	}
 
 	if prNumber == 0 {
 		var err error
@@ -201,7 +201,7 @@ func applyConfigDefaults(cmd *cobra.Command, cfg *config.Config, prFromArg bool)
 		allComments = d.AllComments
 	}
 	if !flags.Changed("include-issue-comments") {
-		includeIssue = d.IncludeIssueComment
+		includeIssue = d.IncludeIssueComments
 	}
 	if !flags.Changed("no-update-check") {
 		noUpdateCheck = d.NoUpdateCheck

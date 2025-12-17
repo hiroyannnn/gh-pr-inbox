@@ -41,7 +41,7 @@ defaults:
 	if !cfg.Defaults.IncludeDiff || !cfg.Defaults.IncludeTimes || !cfg.Defaults.AllComments {
 		t.Fatalf("unexpected defaults: %+v", cfg.Defaults)
 	}
-	if !cfg.Defaults.IncludeIssueComment || !cfg.Defaults.NoUpdateCheck {
+	if !cfg.Defaults.IncludeIssueComments || !cfg.Defaults.NoUpdateCheck {
 		t.Fatalf("unexpected defaults: %+v", cfg.Defaults)
 	}
 }

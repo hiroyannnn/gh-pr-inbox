@@ -15,17 +15,17 @@ type Config struct {
 }
 
 type Defaults struct {
-	Repo                string `yaml:"repo"`
-	PR                  int    `yaml:"pr"`
-	Format              string `yaml:"format"`
-	All                 bool   `yaml:"all"`
-	P0                  bool   `yaml:"p0"`
-	Budget              int    `yaml:"budget"`
-	IncludeDiff         bool   `yaml:"include_diff"`
-	IncludeTimes        bool   `yaml:"include_times"`
-	AllComments         bool   `yaml:"all_comments"`
-	IncludeIssueComment bool   `yaml:"include_issue_comments"`
-	NoUpdateCheck       bool   `yaml:"no_update_check"`
+	Repo                 string `yaml:"repo"`
+	PR                   int    `yaml:"pr"`
+	Format               string `yaml:"format"`
+	All                  bool   `yaml:"all"`
+	P0                   bool   `yaml:"p0"`
+	Budget               int    `yaml:"budget"`
+	IncludeDiff          bool   `yaml:"include_diff"`
+	IncludeTimes         bool   `yaml:"include_times"`
+	AllComments          bool   `yaml:"all_comments"`
+	IncludeIssueComments bool   `yaml:"include_issue_comments"`
+	NoUpdateCheck        bool   `yaml:"no_update_check"`
 }
 
 // Load merges global and repo config files.
