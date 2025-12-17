@@ -12,6 +12,12 @@ Reduce review noise and make it easy to decide what to fix next in your pull req
 gh extension install hiroyannnn/gh-pr-inbox
 ```
 
+If you want a shorter command, set an alias:
+
+```bash
+gh alias set pri 'pr-inbox'
+```
+
 Or build from source:
 
 ```bash
@@ -25,6 +31,7 @@ go build -o gh-pr-inbox .
 ### View inbox for current PR (from PR branch)
 ```bash
 gh pr-inbox
+gh pri
 ```
 
 ### View inbox for specific PR
