@@ -62,6 +62,7 @@ func checkOnce(currentVersion string) (string, error) {
 		return "", err
 	}
 
+	// Best-effort: if either tag isn't a plain semver tag (vMAJOR.MINOR.PATCH) we skip the notice.
 	if ok := isNewer(latestTag, currentVersion); !ok {
 		return "", nil
 	}
@@ -108,6 +109,7 @@ func parseSemverTag(tag string) (semver, bool) {
 	}
 	tag = strings.TrimPrefix(tag, "v")
 	tag = strings.SplitN(tag, "-", 2)[0]
+	tag = strings.SplitN(tag, "+", 2)[0]
 
 	parts := strings.Split(tag, ".")
 	if len(parts) != 3 {

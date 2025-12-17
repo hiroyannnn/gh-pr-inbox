@@ -67,6 +67,8 @@ func init() {
 func runInbox(cmd *cobra.Command, args []string) error {
 	var updateCh <-chan string
 	if !noUpdateCheck {
+		// Start this early so it can run in the background while we fetch PR data.
+		// We only read it later with TryReceive to avoid delaying output (especially JSON).
 		updateCh = updatecheck.Start(buildinfo.Version)
 	}
 
