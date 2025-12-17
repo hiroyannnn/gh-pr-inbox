@@ -51,6 +51,14 @@ gh pr-inbox --repo owner/repo --pr 123
 gh pr-inbox --format json
 ```
 
+### Update notice
+
+By default, `gh pr-inbox` checks for a newer release asynchronously and prints an upgrade hint to stderr when available (it does not block the main command output).
+
+```bash
+gh pr-inbox --no-update-check
+```
+
 ### More details (diff/timestamps/all comments)
 ```bash
 gh pr-inbox --include-diff --include-times --all-comments

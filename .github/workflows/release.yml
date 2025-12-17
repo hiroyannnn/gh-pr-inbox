@@ -49,8 +49,9 @@ jobs:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: "0"
+          VERSION: ${{ github.ref_name }}
         run: |
-          go build -o "${{ matrix.asset_name }}"
+          go build -ldflags "-X github.com/hiroyannnn/gh-pr-inbox/internal/buildinfo.Version=${VERSION}" -o "${{ matrix.asset_name }}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

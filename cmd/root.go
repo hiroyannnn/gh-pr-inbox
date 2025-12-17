@@ -8,28 +8,31 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hiroyannnn/gh-pr-inbox/internal/buildinfo"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/compact"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/config"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/github"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/model"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/render"
 	"github.com/hiroyannnn/gh-pr-inbox/internal/template"
+	"github.com/hiroyannnn/gh-pr-inbox/internal/updatecheck"
 	"github.com/spf13/cobra"
 )
 
 var (
-	repository   string
-	prNumber     int
-	format       string
-	includeAll   bool
-	onlyP0       bool
-	budget       int
-	includeDiff  bool
-	includeTimes bool
-	allComments  bool
-	includeIssue bool
-	promptFile   string
-	promptInline string
+	repository    string
+	prNumber      int
+	format        string
+	includeAll    bool
+	onlyP0        bool
+	budget        int
+	includeDiff   bool
+	includeTimes  bool
+	allComments   bool
+	includeIssue  bool
+	noUpdateCheck bool
+	promptFile    string
+	promptInline  string
 )
 
 var rootCmd = &cobra.Command{
@@ -56,11 +59,19 @@ func init() {
 	rootCmd.Flags().BoolVar(&includeTimes, "include-times", false, "Include comment timestamps")
 	rootCmd.Flags().BoolVar(&allComments, "all-comments", false, "Include all comments for each thread (not just first/latest)")
 	rootCmd.Flags().BoolVar(&includeIssue, "include-issue-comments", false, "Include PR conversation (issue) comments")
+	rootCmd.Flags().BoolVar(&noUpdateCheck, "no-update-check", false, "Disable update checks")
 	rootCmd.Flags().StringVar(&promptFile, "prompt-file", "", "Optional prompt template file")
 	rootCmd.Flags().StringVar(&promptInline, "prompt", "", "Inline prompt template override")
 }
 
 func runInbox(cmd *cobra.Command, args []string) error {
+	var updateCh <-chan string
+	if !noUpdateCheck {
+		// Start this early so it can run in the background while we fetch PR data.
+		// We only read it later with TryReceive to avoid delaying output (especially JSON).
+		updateCh = updatecheck.Start(buildinfo.Version)
+	}
+
 	if len(args) > 0 {
 		var err error
 		prNumber, err = strconv.Atoi(args[0])
@@ -124,6 +135,12 @@ func runInbox(cmd *cobra.Command, args []string) error {
 	items := compactor.Compact(threads)
 	if budget > 0 && len(items) > budget {
 		items = items[:budget]
+	}
+
+	if updateCh != nil {
+		if msg := updatecheck.TryReceive(updateCh); msg != "" {
+			fmt.Fprintln(os.Stderr, msg)
+		}
 	}
 
 	switch format {
