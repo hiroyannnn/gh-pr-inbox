@@ -43,8 +43,12 @@ func TestClient_GetReviewThreads_IncludesAfterCursorOnSecondPage(t *testing.T) {
 	t.Cleanup(func() { execGH = original })
 
 	var calls [][]string
+	var gotQuery string
 	execGH = func(args ...string) ([]byte, error) {
 		calls = append(calls, append([]string(nil), args...))
+		if gotQuery == "" {
+			gotQuery = queryArg(args)
+		}
 		if len(calls) == 1 {
 			return []byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"CUR1"}}}}}}`), nil
 		}
@@ -70,6 +74,13 @@ func TestClient_GetReviewThreads_IncludesAfterCursorOnSecondPage(t *testing.T) {
 	if !hasArg(calls[1], "after=CUR1") {
 		t.Fatalf("expected after=CUR1 on second call")
 	}
+
+	if gotQuery == "" {
+		t.Fatalf("expected query arg to be passed")
+	}
+	if strings.Count(gotQuery, "diffHunk") != 1 {
+		t.Fatalf("expected diffHunk to appear once in query, got %d", strings.Count(gotQuery, "diffHunk"))
+	}
 }
 
 func assertHasArg(t *testing.T, args []string, want string) {
@@ -88,3 +99,11 @@ func hasArg(args []string, want string) bool {
 	return false
 }
 
+func queryArg(args []string) string {
+	for _, a := range args {
+		if strings.HasPrefix(a, "query=") {
+			return a
+		}
+	}
+	return ""
+}
