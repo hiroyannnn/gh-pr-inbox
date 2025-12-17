@@ -128,6 +128,78 @@ func TestCompact_CondenseText_WithMultibyteChars(t *testing.T) {
 	}
 }
 
+func TestCompact_VerboseOptionsControlFields(t *testing.T) {
+	threads := []model.Thread{
+		{
+			ID:       "t1",
+			FilePath: "foo.go",
+			Line:     12,
+			DiffHunk: "@@ -1 +1 @@\n-old\n+new\n",
+			Comments: []model.Comment{
+				{Body: "root", Author: "alice", CreatedAt: "2025-01-01T00:00:00Z"},
+				{Body: "latest", Author: "bob", CreatedAt: "2025-01-02T00:00:00Z"},
+			},
+		},
+	}
+
+	compactor := New(Options{IncludeDiff: true, IncludeTimes: true, AllComments: false})
+	items := compactor.Compact(threads)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.DiffHunk == "" {
+		t.Fatalf("expected DiffHunk to be populated")
+	}
+	if item.RootCreatedAt != "2025-01-01T00:00:00Z" {
+		t.Fatalf("unexpected RootCreatedAt: %q", item.RootCreatedAt)
+	}
+	if item.LatestCreatedAt != "2025-01-02T00:00:00Z" {
+		t.Fatalf("unexpected LatestCreatedAt: %q", item.LatestCreatedAt)
+	}
+	if len(item.Comments) != 0 {
+		t.Fatalf("expected Comments to be empty when AllComments is false, got %d", len(item.Comments))
+	}
+}
+
+func TestCompact_AllCommentsStripsTimesUnlessIncludeTimes(t *testing.T) {
+	threads := []model.Thread{
+		{
+			ID:       "t1",
+			FilePath: "foo.go",
+			Line:     12,
+			Comments: []model.Comment{
+				{Body: "root", Author: "alice", CreatedAt: "2025-01-01T00:00:00Z"},
+				{Body: "latest", Author: "bob", CreatedAt: "2025-01-02T00:00:00Z"},
+			},
+		},
+	}
+
+	compactor := New(Options{AllComments: true, IncludeTimes: false})
+	items := compactor.Compact(threads)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if len(items[0].Comments) != 2 {
+		t.Fatalf("expected 2 comments, got %d", len(items[0].Comments))
+	}
+	for _, c := range items[0].Comments {
+		if c.CreatedAt != "" {
+			t.Fatalf("expected CreatedAt to be stripped when IncludeTimes is false, got %q", c.CreatedAt)
+		}
+	}
+
+	compactor = New(Options{AllComments: true, IncludeTimes: true})
+	items = compactor.Compact(threads)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].Comments[0].CreatedAt == "" || items[0].Comments[1].CreatedAt == "" {
+		t.Fatalf("expected CreatedAt to be kept when IncludeTimes is true")
+	}
+}
+
 func isValidUTF8(s string) bool {
 	for _, r := range s {
 		if r == '\uFFFD' { // Unicode replacement character indicates invalid UTF-8

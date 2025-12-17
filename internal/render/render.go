@@ -49,7 +49,7 @@ func Markdown(meta *model.PRMeta, items []model.InboxItem) string {
 			fmt.Fprintf(builder, "  - Link: %s\n", item.URL)
 
 			if item.DiffHunk != "" {
-				fmt.Fprintf(builder, "  - Diff:\n\n")
+				fmt.Fprintf(builder, "  - Diff:\n")
 				indented := strings.ReplaceAll(strings.TrimRight(item.DiffHunk, "\n"), "\n", "\n    ")
 				fmt.Fprintf(builder, "    ```diff\n    %s\n    ```\n", indented)
 			}

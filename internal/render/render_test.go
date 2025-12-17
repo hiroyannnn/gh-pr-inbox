@@ -17,6 +17,18 @@ func TestMarkdownIncludesSummaryAndGrouping(t *testing.T) {
 
 	out := Markdown(meta, items)
 
+	unexpected := []string{
+		"- Created:",
+		"- Updated:",
+		"- Diff:",
+		"- Comments (",
+	}
+	for _, needle := range unexpected {
+		if strings.Contains(out, needle) {
+			t.Fatalf("expected markdown to not contain %q when verbose fields are empty", needle)
+		}
+	}
+
 	required := []string{
 		"Summary: P0 1 | P1 1 | P2 1",
 		"Hot files: api/service.go (2)",
@@ -68,6 +80,10 @@ func TestMarkdownRendersVerboseFields(t *testing.T) {
 	}
 
 	out := Markdown(meta, items)
+
+	if strings.Contains(out, "- Diff:\n\n    ```diff") {
+		t.Fatalf("expected no extra blank line before diff block: %s", out)
+	}
 
 	required := []string{
 		"- [P0] L12 by alice — must fix",
