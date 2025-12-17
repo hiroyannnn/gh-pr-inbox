@@ -97,3 +97,21 @@ gh pr-inbox --format json
 ## License
 
 MIT
+
+## Development
+
+### Release
+
+```bash
+make release version=1.0.0
+```
+
+This pushes the `v1.0.0` tag and triggers the release workflow (`.github/workflows/release.yml`) to build release assets.
+
+### Useful commands
+
+```bash
+make help
+make ci
+make reinstall-local
+```
