@@ -12,7 +12,7 @@ func TestClient_GetPRMeta_PassesVariablesAsFields(t *testing.T) {
 	var gotArgs []string
 	execGH = func(args ...string) ([]byte, error) {
 		gotArgs = append([]string(nil), args...)
-		return []byte(`{"data":{"repository":{"pullRequest":{"number":123,"title":"t","url":"u","bodyText":"line1\n\n--include-diff: show diff context\n--include-times: show timestamps\nline2"}}}}`), nil
+		return []byte(`{"data":{"repository":{"pullRequest":{"number":123,"title":"t","url":"u","bodyText":"b"}}}}`), nil
 	}
 
 	client, err := NewClient("octo/repo")
@@ -35,32 +35,6 @@ func TestClient_GetPRMeta_PassesVariablesAsFields(t *testing.T) {
 		if strings.HasPrefix(a, "variables=") {
 			t.Fatalf("unexpected variables= arg: %q", a)
 		}
-	}
-}
-
-func TestClient_GetPRMeta_StripsHelpLikeFlagLinesFromGoal(t *testing.T) {
-	original := execGH
-	t.Cleanup(func() { execGH = original })
-
-	execGH = func(args ...string) ([]byte, error) {
-		return []byte(`{"data":{"repository":{"pullRequest":{"number":123,"title":"t","url":"u","bodyText":"Line A\n\n--flag-a: A\n--flag-b: B\n\nLine B"}}}}`), nil
-	}
-
-	client, err := NewClient("octo/repo")
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-
-	meta, err := client.GetPRMeta(123)
-	if err != nil {
-		t.Fatalf("GetPRMeta: %v", err)
-	}
-
-	if strings.Contains(meta.Goal, "--flag-a") || strings.Contains(meta.Goal, "--flag-b") {
-		t.Fatalf("expected goal to not include flag-like lines, got: %q", meta.Goal)
-	}
-	if !strings.Contains(meta.Goal, "Line A") || !strings.Contains(meta.Goal, "Line B") {
-		t.Fatalf("expected goal to keep non-flag lines, got: %q", meta.Goal)
 	}
 }
 

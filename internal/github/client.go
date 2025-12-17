@@ -68,7 +68,7 @@ bodyText
 	}
 
 	pr := parsed.Data.Repository.PullRequest
-	goal := sanitizeGoal(pr.BodyText, 400)
+	goal := truncateRunes(pr.BodyText, 400)
 
 	return &model.PRMeta{
 		Number: pr.Number,
@@ -77,40 +77,6 @@ bodyText
 		Goal:   goal,
 		Repo:   c.repository,
 	}, nil
-}
-
-func sanitizeGoal(body string, limitRunes int) string {
-	lines := strings.Split(body, "\n")
-	kept := make([]string, 0, len(lines))
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "--") {
-			continue
-		}
-		if trimmed == "Usage:" || trimmed == "Flags:" || trimmed == "Options:" {
-			continue
-		}
-		kept = append(kept, strings.TrimRight(line, " \t"))
-	}
-
-	out := strings.TrimSpace(strings.Join(kept, "\n"))
-	out = collapseBlankLines(out)
-	return truncateRunes(out, limitRunes)
-}
-
-func collapseBlankLines(s string) string {
-	lines := strings.Split(s, "\n")
-	out := make([]string, 0, len(lines))
-	previousBlank := false
-	for _, line := range lines {
-		blank := strings.TrimSpace(line) == ""
-		if blank && previousBlank {
-			continue
-		}
-		out = append(out, line)
-		previousBlank = blank
-	}
-	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 func truncateRunes(s string, limit int) string {
