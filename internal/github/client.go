@@ -4,10 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/hiroyannnn/gh-pr-inbox/internal/model"
 )
+
+var execGH = func(args ...string) ([]byte, error) {
+	cmd := exec.Command("gh", args...)
+	return cmd.CombinedOutput()
+}
 
 // Client handles GitHub API interactions via the gh CLI.
 type Client struct {
@@ -91,7 +97,6 @@ isResolved
 path
 line
 originalLine
-diffHunk
 comments(first:50) {
 nodes {
 id
@@ -100,6 +105,7 @@ body
 author { login }
 createdAt
 url
+diffHunk
 }
 }
 }
@@ -131,7 +137,6 @@ pageInfo { hasNextPage endCursor }
 								Path         string `json:"path"`
 								Line         int    `json:"line"`
 								OriginalLine int    `json:"originalLine"`
-								DiffHunk     string `json:"diffHunk"`
 								Comments     struct {
 									Nodes []struct {
 										ID         string `json:"id"`
@@ -142,6 +147,7 @@ pageInfo { hasNextPage endCursor }
 										} `json:"author"`
 										CreatedAt string `json:"createdAt"`
 										URL       string `json:"url"`
+										DiffHunk  string `json:"diffHunk"`
 									} `json:"nodes"`
 								} `json:"comments"`
 							} `json:"nodes"`
@@ -166,10 +172,10 @@ pageInfo { hasNextPage endCursor }
 				FilePath: node.Path,
 				Line:     firstNonZero(node.Line, node.OriginalLine),
 				Resolved: node.IsResolved,
-				DiffHunk: node.DiffHunk,
 			}
 			if len(node.Comments.Nodes) > 0 {
 				thread.URL = node.Comments.Nodes[0].URL
+				thread.DiffHunk = node.Comments.Nodes[0].DiffHunk
 			}
 			for _, cmt := range node.Comments.Nodes {
 				thread.Comments = append(thread.Comments, model.Comment{
@@ -194,17 +200,20 @@ pageInfo { hasNextPage endCursor }
 }
 
 func (c *Client) runGraphQL(query string, variables map[string]any) ([]byte, error) {
-	variablesJSON, err := json.Marshal(variables)
-	if err != nil {
-		return nil, err
+	args := []string{"api", "graphql", "-f", fmt.Sprintf("query=%s", query)}
+
+	keys := make([]string, 0, len(variables))
+	for key := range variables {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		value := variables[key]
+		args = append(args, "-F", fmt.Sprintf("%s=%v", key, value))
 	}
 
-	cmd := exec.Command(
-		"gh", "api", "graphql",
-		"-f", fmt.Sprintf("query=%s", query),
-		"-f", fmt.Sprintf("variables=%s", string(variablesJSON)),
-	)
-	output, err := cmd.CombinedOutput()
+	output, err := execGH(args...)
 	if err != nil {
 		return nil, fmt.Errorf("gh graphql failed: %w\nOutput: %s", err, string(output))
 	}
