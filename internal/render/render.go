@@ -34,9 +34,40 @@ func Markdown(meta *model.PRMeta, items []model.InboxItem) string {
 	for _, file := range files {
 		fmt.Fprintf(builder, "## %s\n\n", file)
 		for _, item := range grouped[file] {
-			fmt.Fprintf(builder, "- [%s] L%d by %s — %s\n", item.Priority, item.LineNumber, item.Author, item.Summary)
+			if item.LineNumber > 0 {
+				fmt.Fprintf(builder, "- [%s] L%d by %s — %s\n", item.Priority, item.LineNumber, item.Author, item.Summary)
+			} else {
+				fmt.Fprintf(builder, "- [%s] by %s — %s\n", item.Priority, item.Author, item.Summary)
+			}
 			fmt.Fprintf(builder, "  - Latest: %s\n", item.Latest)
+			if item.RootCreatedAt != "" {
+				fmt.Fprintf(builder, "  - Created: %s\n", item.RootCreatedAt)
+			}
+			if item.LatestCreatedAt != "" {
+				fmt.Fprintf(builder, "  - Updated: %s\n", item.LatestCreatedAt)
+			}
 			fmt.Fprintf(builder, "  - Link: %s\n", item.URL)
+
+			if item.DiffHunk != "" {
+				fmt.Fprintf(builder, "  - Diff:\n")
+				indented := strings.ReplaceAll(strings.TrimRight(item.DiffHunk, "\n"), "\n", "\n    ")
+				fmt.Fprintf(builder, "    ```diff\n    %s\n    ```\n", indented)
+			}
+
+			if len(item.Comments) > 0 {
+				fmt.Fprintf(builder, "  - Comments (%d):\n", len(item.Comments))
+				for _, c := range item.Comments {
+					body := truncate(c.Body, 220)
+					if c.CreatedAt != "" {
+						fmt.Fprintf(builder, "    - %s (%s): %s\n", c.Author, c.CreatedAt, body)
+					} else {
+						fmt.Fprintf(builder, "    - %s: %s\n", c.Author, body)
+					}
+					if c.URL != "" && c.URL != item.URL {
+						fmt.Fprintf(builder, "      - %s\n", c.URL)
+					}
+				}
+			}
 		}
 		builder.WriteString("\n")
 	}

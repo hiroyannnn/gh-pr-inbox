@@ -51,6 +51,16 @@ gh pr-inbox --repo owner/repo --pr 123
 gh pr-inbox --format json
 ```
 
+### More details (diff/timestamps/all comments)
+```bash
+gh pr-inbox --include-diff --include-times --all-comments
+```
+
+### Include PR conversation comments
+```bash
+gh pr-inbox --include-issue-comments
+```
+
 ## Features
 
 - **Thread Grouping**: Automatically groups review comments into conversation threads

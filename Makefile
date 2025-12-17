@@ -1,5 +1,8 @@
 GOFMT_TARGETS := ./cmd ./internal ./main.go
 MODULE_FILES := go.mod go.sum
+GOCACHE ?= $(CURDIR)/.cache/go-build
+GOMODCACHE ?= $(CURDIR)/.cache/go-mod
+GOENV := env GOCACHE="$(GOCACHE)" GOMODCACHE="$(GOMODCACHE)"
 
 .PHONY: all clean help fmt fmt-check tidy tidy-check vet test lint build ci install-local reinstall-local reinstall-prod release delete-tag
 
@@ -23,22 +26,22 @@ fmt-check: ## Check Go formatting
 	fi
 
 tidy: ## Run go mod tidy
-	go mod tidy
+	$(GOENV) go mod tidy
 
 tidy-check: ## Ensure go.mod/go.sum are tidy
-	go mod tidy
+	$(GOENV) go mod tidy
 	@git diff --quiet -- $(MODULE_FILES) || (echo "go.mod/go.sum are not tidy"; git diff -- $(MODULE_FILES); exit 1)
 
 vet: ## Run go vet
-	go vet ./...
+	$(GOENV) go vet ./...
 
 test: ## Run tests
-	go test ./...
+	$(GOENV) go test ./...
 
 lint: fmt-check vet ## Run linters
 
 build: ## Build the binary
-	go build -o gh-pr-inbox .
+	$(GOENV) go build -o gh-pr-inbox .
 
 ci: tidy-check lint test ## Run CI tasks
 

@@ -22,6 +22,10 @@ type Client struct {
 	name       string
 }
 
+type gqlAuthor struct {
+	Login string `json:"login"`
+}
+
 // NewClient creates a new GitHub client for the given owner/repo string.
 func NewClient(repository string) (*Client, error) {
 	parts := strings.Split(repository, "/")
@@ -68,10 +72,7 @@ bodyText
 	}
 
 	pr := parsed.Data.Repository.PullRequest
-	goal := pr.BodyText
-	if len(goal) > 400 {
-		goal = goal[:400]
-	}
+	goal := truncateRunes(pr.BodyText, 400)
 
 	return &model.PRMeta{
 		Number: pr.Number,
@@ -80,6 +81,24 @@ bodyText
 		Goal:   goal,
 		Repo:   c.repository,
 	}, nil
+}
+
+func truncateRunes(s string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit])
+}
+
+func authorLogin(author *gqlAuthor) string {
+	if author == nil || author.Login == "" {
+		return "unknown"
+	}
+	return author.Login
 }
 
 // GetReviewThreads fetches review threads for the PR using GraphQL.
@@ -139,15 +158,13 @@ pageInfo { hasNextPage endCursor }
 								OriginalLine int    `json:"originalLine"`
 								Comments     struct {
 									Nodes []struct {
-										ID         string `json:"id"`
-										DatabaseID int64  `json:"databaseId"`
-										Body       string `json:"body"`
-										Author     struct {
-											Login string `json:"login"`
-										} `json:"author"`
-										CreatedAt string `json:"createdAt"`
-										URL       string `json:"url"`
-										DiffHunk  string `json:"diffHunk"`
+										ID         string     `json:"id"`
+										DatabaseID int64      `json:"databaseId"`
+										Body       string     `json:"body"`
+										Author     *gqlAuthor `json:"author"`
+										CreatedAt  string     `json:"createdAt"`
+										URL        string     `json:"url"`
+										DiffHunk   string     `json:"diffHunk"`
 									} `json:"nodes"`
 								} `json:"comments"`
 							} `json:"nodes"`
@@ -181,7 +198,7 @@ pageInfo { hasNextPage endCursor }
 				thread.Comments = append(thread.Comments, model.Comment{
 					ID:        fmt.Sprintf("%d", cmt.DatabaseID),
 					Body:      cmt.Body,
-					Author:    cmt.Author.Login,
+					Author:    authorLogin(cmt.Author),
 					CreatedAt: cmt.CreatedAt,
 					URL:       cmt.URL,
 				})
@@ -191,6 +208,97 @@ pageInfo { hasNextPage endCursor }
 
 		if rt.PageInfo.HasNextPage {
 			cursor = &rt.PageInfo.EndCursor
+			continue
+		}
+		break
+	}
+
+	return threads, nil
+}
+
+// GetIssueCommentThreads fetches PR conversation (issue) comments and represents each as a thread-like item.
+func (c *Client) GetIssueCommentThreads(prNumber int) ([]model.Thread, error) {
+	var threads []model.Thread
+	var cursor *string
+
+	query := `query($owner:String!, $name:String!, $number:Int!, $after:String) {
+repository(owner:$owner, name:$name) {
+pullRequest(number:$number) {
+comments(first:100, after:$after) {
+nodes {
+id
+databaseId
+body
+author { login }
+createdAt
+url
+}
+pageInfo { hasNextPage endCursor }
+}
+}
+}
+}`
+
+	for {
+		variables := map[string]any{"owner": c.owner, "name": c.name, "number": prNumber}
+		if cursor != nil {
+			variables["after"] = *cursor
+		}
+
+		resp, err := c.runGraphQL(query, variables)
+		if err != nil {
+			return nil, err
+		}
+
+		var parsed struct {
+			Data struct {
+				Repository struct {
+					PullRequest struct {
+						Comments struct {
+							Nodes []struct {
+								ID         string     `json:"id"`
+								DatabaseID int64      `json:"databaseId"`
+								Body       string     `json:"body"`
+								Author     *gqlAuthor `json:"author"`
+								CreatedAt  string     `json:"createdAt"`
+								URL        string     `json:"url"`
+							} `json:"nodes"`
+							PageInfo struct {
+								HasNextPage bool   `json:"hasNextPage"`
+								EndCursor   string `json:"endCursor"`
+							} `json:"pageInfo"`
+						} `json:"comments"`
+					} `json:"pullRequest"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+
+		if err := json.Unmarshal(resp, &parsed); err != nil {
+			return nil, fmt.Errorf("failed to parse issue comments: %w", err)
+		}
+
+		pc := parsed.Data.Repository.PullRequest.Comments
+		for _, node := range pc.Nodes {
+			comment := model.Comment{
+				ID:        fmt.Sprintf("%d", node.DatabaseID),
+				Body:      node.Body,
+				Author:    authorLogin(node.Author),
+				CreatedAt: node.CreatedAt,
+				URL:       node.URL,
+			}
+
+			threads = append(threads, model.Thread{
+				ID:       "IC_" + node.ID,
+				FilePath: "PR conversation",
+				Line:     0,
+				Resolved: false,
+				Comments: []model.Comment{comment},
+				URL:      node.URL,
+			})
+		}
+
+		if pc.PageInfo.HasNextPage {
+			cursor = &pc.PageInfo.EndCursor
 			continue
 		}
 		break

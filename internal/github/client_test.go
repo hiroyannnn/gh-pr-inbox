@@ -83,6 +83,101 @@ func TestClient_GetReviewThreads_IncludesAfterCursorOnSecondPage(t *testing.T) {
 	}
 }
 
+func TestClient_GetIssueCommentThreads_IncludesAfterCursorOnSecondPage(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	var calls [][]string
+	var gotQuery string
+	execGH = func(args ...string) ([]byte, error) {
+		calls = append(calls, append([]string(nil), args...))
+		if gotQuery == "" {
+			gotQuery = queryArg(args)
+		}
+		if len(calls) == 1 {
+			return []byte(`{"data":{"repository":{"pullRequest":{"comments":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":"CUR1"}}}}}}`), nil
+		}
+		return []byte(`{"data":{"repository":{"pullRequest":{"comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	if _, err := client.GetIssueCommentThreads(123); err != nil {
+		t.Fatalf("GetIssueCommentThreads: %v", err)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 GraphQL calls, got %d", len(calls))
+	}
+
+	if hasArg(calls[0], "after=CUR1") {
+		t.Fatalf("did not expect after=CUR1 on first call")
+	}
+	if !hasArg(calls[1], "after=CUR1") {
+		t.Fatalf("expected after=CUR1 on second call")
+	}
+
+	if gotQuery == "" {
+		t.Fatalf("expected query arg to be passed")
+	}
+	if !strings.Contains(gotQuery, "comments(first:100") {
+		t.Fatalf("expected comments query, got: %s", gotQuery)
+	}
+}
+
+func TestClient_GetReviewThreads_AllowsNullAuthor(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	execGH = func(args ...string) ([]byte, error) {
+		return []byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"t1","isResolved":false,"path":"a.go","line":1,"originalLine":0,"comments":{"nodes":[{"id":"c1","databaseId":1,"body":"b","author":null,"createdAt":"2025-01-01T00:00:00Z","url":"u","diffHunk":"@@\\n"}]}}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	threads, err := client.GetReviewThreads(123)
+	if err != nil {
+		t.Fatalf("GetReviewThreads: %v", err)
+	}
+	if len(threads) != 1 || len(threads[0].Comments) != 1 {
+		t.Fatalf("unexpected threads/comments: %+v", threads)
+	}
+	if threads[0].Comments[0].Author != "unknown" {
+		t.Fatalf("expected unknown author, got %q", threads[0].Comments[0].Author)
+	}
+}
+
+func TestClient_GetIssueCommentThreads_AllowsNullAuthor(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	execGH = func(args ...string) ([]byte, error) {
+		return []byte(`{"data":{"repository":{"pullRequest":{"comments":{"nodes":[{"id":"c1","databaseId":1,"body":"b","author":null,"createdAt":"2025-01-01T00:00:00Z","url":"u"}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	threads, err := client.GetIssueCommentThreads(123)
+	if err != nil {
+		t.Fatalf("GetIssueCommentThreads: %v", err)
+	}
+	if len(threads) != 1 || len(threads[0].Comments) != 1 {
+		t.Fatalf("unexpected threads/comments: %+v", threads)
+	}
+	if threads[0].Comments[0].Author != "unknown" {
+		t.Fatalf("expected unknown author, got %q", threads[0].Comments[0].Author)
+	}
+}
+
 func assertHasArg(t *testing.T, args []string, want string) {
 	t.Helper()
 	if !hasArg(args, want) {
