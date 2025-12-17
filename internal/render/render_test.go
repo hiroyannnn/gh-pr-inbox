@@ -44,3 +44,43 @@ func TestJSONRendering(t *testing.T) {
 		t.Fatalf("json output missing fields: %s", out)
 	}
 }
+
+func TestMarkdownRendersVerboseFields(t *testing.T) {
+	meta := &model.PRMeta{Repo: "acme/widgets", Number: 42, Title: "Add feature", URL: "http://example.com"}
+	items := []model.InboxItem{
+		{
+			ThreadID:        "t1",
+			Priority:        "P0",
+			FilePath:        "api/service.go",
+			LineNumber:      12,
+			Author:          "alice",
+			Summary:         "must fix",
+			Latest:          "do it",
+			URL:             "u1",
+			RootCreatedAt:   "2025-01-01T00:00:00Z",
+			LatestCreatedAt: "2025-01-02T00:00:00Z",
+			DiffHunk:        "@@ -1 +1 @@\n-old\n+new\n",
+			Comments: []model.Comment{
+				{Author: "alice", CreatedAt: "2025-01-01T00:00:00Z", Body: "root", URL: "c1"},
+				{Author: "bob", CreatedAt: "2025-01-02T00:00:00Z", Body: "reply", URL: "c2"},
+			},
+		},
+	}
+
+	out := Markdown(meta, items)
+
+	required := []string{
+		"- Created: 2025-01-01T00:00:00Z",
+		"- Updated: 2025-01-02T00:00:00Z",
+		"- Diff:",
+		"```diff",
+		"- Comments (2):",
+		"- alice (2025-01-01T00:00:00Z): root",
+		"- bob (2025-01-02T00:00:00Z): reply",
+	}
+	for _, expected := range required {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected markdown to contain %q", expected)
+		}
+	}
+}

@@ -85,10 +85,11 @@ func (c *Compactor) Compact(threads []model.Thread) []model.InboxItem {
 func copyComments(comments []model.Comment, includeTimes bool) []model.Comment {
 	out := make([]model.Comment, 0, len(comments))
 	for _, c := range comments {
+		copy := c
 		if !includeTimes {
-			c.CreatedAt = ""
+			copy.CreatedAt = ""
 		}
-		out = append(out, c)
+		out = append(out, copy)
 	}
 	return out
 }

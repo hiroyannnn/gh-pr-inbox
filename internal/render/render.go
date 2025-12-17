@@ -46,11 +46,8 @@ func Markdown(meta *model.PRMeta, items []model.InboxItem) string {
 
 			if item.DiffHunk != "" {
 				fmt.Fprintf(builder, "  - Diff:\n\n")
-				fmt.Fprintf(builder, "    ```diff\n")
-				for _, line := range strings.Split(strings.TrimRight(item.DiffHunk, "\n"), "\n") {
-					fmt.Fprintf(builder, "    %s\n", line)
-				}
-				fmt.Fprintf(builder, "    ```\n")
+				indented := strings.ReplaceAll(strings.TrimRight(item.DiffHunk, "\n"), "\n", "\n    ")
+				fmt.Fprintf(builder, "    ```diff\n    %s\n    ```\n", indented)
 			}
 
 			if len(item.Comments) > 0 {
