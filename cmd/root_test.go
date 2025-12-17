@@ -7,6 +7,63 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type globalsSnapshot struct {
+	repository    string
+	prNumber      int
+	format        string
+	includeAll    bool
+	onlyP0        bool
+	budget        int
+	includeDiff   bool
+	includeTimes  bool
+	allComments   bool
+	includeIssue  bool
+	noUpdateCheck bool
+	promptFile    string
+	promptInline  string
+}
+
+func snapshotGlobals() globalsSnapshot {
+	return globalsSnapshot{
+		repository:    repository,
+		prNumber:      prNumber,
+		format:        format,
+		includeAll:    includeAll,
+		onlyP0:        onlyP0,
+		budget:        budget,
+		includeDiff:   includeDiff,
+		includeTimes:  includeTimes,
+		allComments:   allComments,
+		includeIssue:  includeIssue,
+		noUpdateCheck: noUpdateCheck,
+		promptFile:    promptFile,
+		promptInline:  promptInline,
+	}
+}
+
+func (s globalsSnapshot) restore() {
+	repository = s.repository
+	prNumber = s.prNumber
+	format = s.format
+	includeAll = s.includeAll
+	onlyP0 = s.onlyP0
+	budget = s.budget
+	includeDiff = s.includeDiff
+	includeTimes = s.includeTimes
+	allComments = s.allComments
+	includeIssue = s.includeIssue
+	noUpdateCheck = s.noUpdateCheck
+	promptFile = s.promptFile
+	promptInline = s.promptInline
+}
+
+func setupTestCommand(t *testing.T) *cobra.Command {
+	t.Helper()
+	snap := snapshotGlobals()
+	t.Cleanup(snap.restore)
+	return newTestCommand()
+}
+
 func newTestCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "pr-inbox"}
 	cmd.Flags().StringVarP(&repository, "repo", "R", "", "Repository in OWNER/REPO format")
@@ -26,7 +83,7 @@ func newTestCommand() *cobra.Command {
 }
 
 func TestApplyConfigDefaults_PrecedenceCliOverConfig(t *testing.T) {
-	cmd := newTestCommand()
+	cmd := setupTestCommand(t)
 	if err := cmd.Flags().Set("repo", "cli/repo"); err != nil {
 		t.Fatalf("set repo: %v", err)
 	}
@@ -51,7 +108,7 @@ func TestApplyConfigDefaults_PrecedenceCliOverConfig(t *testing.T) {
 }
 
 func TestApplyConfigDefaults_PrecedenceConfigOverAutoDetect(t *testing.T) {
-	cmd := newTestCommand()
+	cmd := setupTestCommand(t)
 	cfg := &config.Config{
 		Defaults: config.Defaults{
 			Repo:   "cfg/repo",
@@ -74,7 +131,7 @@ func TestApplyConfigDefaults_PrecedenceConfigOverAutoDetect(t *testing.T) {
 }
 
 func TestApplyConfigDefaults_DoesNotOverridePrFromArg(t *testing.T) {
-	cmd := newTestCommand()
+	cmd := setupTestCommand(t)
 	prNumber = 999
 
 	cfg := &config.Config{
@@ -87,5 +144,52 @@ func TestApplyConfigDefaults_DoesNotOverridePrFromArg(t *testing.T) {
 
 	if prNumber != 999 {
 		t.Fatalf("expected prNumber from arg to win, got %d", prNumber)
+	}
+}
+
+func TestApplyConfigDefaults_BoolDefaultsFromConfig(t *testing.T) {
+	cmd := setupTestCommand(t)
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			All:                  true,
+			P0:                   true,
+			IncludeDiff:          true,
+			IncludeTimes:         true,
+			AllComments:          true,
+			IncludeIssueComments: true,
+			NoUpdateCheck:        true,
+		},
+	}
+
+	applyConfigDefaults(cmd, cfg, false)
+
+	if !includeAll || !onlyP0 || !includeDiff || !includeTimes || !allComments || !includeIssue || !noUpdateCheck {
+		t.Fatalf("expected bool defaults from config to apply")
+	}
+}
+
+func TestApplyConfigDefaults_BoolCliWinsOverConfig(t *testing.T) {
+	cmd := setupTestCommand(t)
+	if err := cmd.Flags().Set("all", "false"); err != nil {
+		t.Fatalf("set all: %v", err)
+	}
+	if err := cmd.Flags().Set("include-issue-comments", "false"); err != nil {
+		t.Fatalf("set include-issue-comments: %v", err)
+	}
+
+	cfg := &config.Config{
+		Defaults: config.Defaults{
+			All:                  true,
+			IncludeIssueComments: true,
+		},
+	}
+
+	applyConfigDefaults(cmd, cfg, false)
+
+	if includeAll {
+		t.Fatalf("expected --all (explicit false) to win over config true")
+	}
+	if includeIssue {
+		t.Fatalf("expected --include-issue-comments (explicit false) to win over config true")
 	}
 }

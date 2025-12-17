@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -43,5 +45,48 @@ defaults:
 	}
 	if !cfg.Defaults.IncludeIssueComments || !cfg.Defaults.NoUpdateCheck {
 		t.Fatalf("unexpected defaults: %+v", cfg.Defaults)
+	}
+}
+
+func TestLoad_MergesGlobalThenRepoOverrides(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	globalPath := filepath.Join(home, ".config", "gh", "pr-inbox.yml")
+	if err := os.MkdirAll(filepath.Dir(globalPath), 0o755); err != nil {
+		t.Fatalf("mkdir global config dir: %v", err)
+	}
+	if err := os.WriteFile(globalPath, []byte(`
+defaults:
+  repo: "global/repo"
+  pr: 111
+  include_diff: true
+`), 0o644); err != nil {
+		t.Fatalf("write global config: %v", err)
+	}
+
+	repoRoot := t.TempDir()
+	repoPath := filepath.Join(repoRoot, ".github", "pr-inbox.yml")
+	if err := os.MkdirAll(filepath.Dir(repoPath), 0o755); err != nil {
+		t.Fatalf("mkdir repo config dir: %v", err)
+	}
+	if err := os.WriteFile(repoPath, []byte(`
+defaults:
+  repo: "repo/repo"
+  pr: 222
+`), 0o644); err != nil {
+		t.Fatalf("write repo config: %v", err)
+	}
+
+	cfg, err := Load(repoRoot)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	if cfg.Defaults.Repo != "repo/repo" || cfg.Defaults.PR != 222 {
+		t.Fatalf("expected repo config to override: %+v", cfg.Defaults)
+	}
+	if !cfg.Defaults.IncludeDiff {
+		t.Fatalf("expected global default to remain when repo config omits it")
 	}
 }
