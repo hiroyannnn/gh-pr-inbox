@@ -35,9 +35,10 @@ func Load(repoRoot string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	paths := []string{
-		filepath.Join(home, ".config", "gh", "pr-inbox.yml"),
-		filepath.Join(repoRoot, ".github", "pr-inbox.yml"),
+
+	paths := []string{filepath.Join(home, ".config", "gh", "pr-inbox.yml")}
+	if repoRoot != "" {
+		paths = append(paths, filepath.Join(repoRoot, ".github", "pr-inbox.yml"))
 	}
 	for _, path := range paths {
 		if _, err := os.Stat(path); err == nil {

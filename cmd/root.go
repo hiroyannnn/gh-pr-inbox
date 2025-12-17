@@ -65,7 +65,10 @@ func init() {
 }
 
 func runInbox(cmd *cobra.Command, args []string) error {
-	repoRoot, _ := os.Getwd()
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		repoRoot = ""
+	}
 	cfg, err := config.Load(repoRoot)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
