@@ -1,7 +1,12 @@
 GOFMT_TARGETS := ./cmd ./internal ./main.go
 MODULE_FILES := go.mod go.sum
 
-.PHONY: help fmt fmt-check tidy tidy-check vet test lint build ci install-local reinstall-local reinstall-prod release delete-tag
+.PHONY: all clean help fmt fmt-check tidy tidy-check vet test lint build ci install-local reinstall-local reinstall-prod release delete-tag
+
+all: build ## Default target: build the binary
+
+clean: ## Remove built artifacts
+	rm -f gh-pr-inbox
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -67,7 +72,7 @@ release: ## Create a new release tag (make release version=1.0.0)
 		exit 1; \
 	fi
 	@echo "Running CI tasks..."
-	@if ! $(MAKE) ci > /dev/null; then \
+	@if ! $(MAKE) ci; then \
 		echo "CI tasks failed; run 'make ci' for details"; \
 		exit 1; \
 	fi

@@ -106,7 +106,7 @@ MIT
 make release version=1.0.0
 ```
 
-This pushes the `v1.0.0` tag and triggers `.github/workflows/release.yml` to build release assets.
+This pushes the `v1.0.0` tag and triggers the release workflow (`.github/workflows/release.yml`) to build release assets.
 
 ### Useful commands
 

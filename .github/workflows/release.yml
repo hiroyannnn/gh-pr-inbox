@@ -30,6 +30,10 @@ jobs:
             arch: amd64
             ext: ""
             asset_name: gh-pr-inbox
+          - os: linux
+            arch: arm64
+            ext: ""
+            asset_name: gh-pr-inbox
 
     steps:
       - uses: actions/checkout@v4
@@ -100,10 +104,8 @@ jobs:
             ./release/*
 
       - name: Publish Release
-        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag_name="${GITHUB_REF#refs/tags/}"
           gh release edit "$tag_name" --draft=false
-
