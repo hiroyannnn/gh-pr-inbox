@@ -4,10 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/hiroyannnn/gh-pr-inbox/internal/model"
 )
+
+var execGH = func(args ...string) ([]byte, error) {
+	cmd := exec.Command("gh", args...)
+	return cmd.CombinedOutput()
+}
 
 // Client handles GitHub API interactions via the gh CLI.
 type Client struct {
@@ -194,17 +200,20 @@ pageInfo { hasNextPage endCursor }
 }
 
 func (c *Client) runGraphQL(query string, variables map[string]any) ([]byte, error) {
-	variablesJSON, err := json.Marshal(variables)
-	if err != nil {
-		return nil, err
+	args := []string{"api", "graphql", "-f", fmt.Sprintf("query=%s", query)}
+
+	keys := make([]string, 0, len(variables))
+	for key := range variables {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		value := variables[key]
+		args = append(args, "-F", fmt.Sprintf("%s=%v", key, value))
 	}
 
-	cmd := exec.Command(
-		"gh", "api", "graphql",
-		"-f", fmt.Sprintf("query=%s", query),
-		"-f", fmt.Sprintf("variables=%s", string(variablesJSON)),
-	)
-	output, err := cmd.CombinedOutput()
+	output, err := execGH(args...)
 	if err != nil {
 		return nil, fmt.Errorf("gh graphql failed: %w\nOutput: %s", err, string(output))
 	}
