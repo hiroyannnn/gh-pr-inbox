@@ -87,7 +87,7 @@ func (c *Client) GetReviewThreads(prNumber int) ([]model.Thread, error) {
 	var threads []model.Thread
 	var cursor *string
 
-query := `query($owner:String!, $name:String!, $number:Int!, $after:String) {
+	query := `query($owner:String!, $name:String!, $number:Int!, $after:String) {
 repository(owner:$owner, name:$name) {
 pullRequest(number:$number) {
 reviewThreads(first:100, after:$after) {
@@ -147,7 +147,7 @@ pageInfo { hasNextPage endCursor }
 										} `json:"author"`
 										CreatedAt string `json:"createdAt"`
 										URL       string `json:"url"`
-										DiffHunk   string `json:"diffHunk"`
+										DiffHunk  string `json:"diffHunk"`
 									} `json:"nodes"`
 								} `json:"comments"`
 							} `json:"nodes"`
