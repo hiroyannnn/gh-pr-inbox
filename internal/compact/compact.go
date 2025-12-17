@@ -11,6 +11,9 @@ import (
 type Options struct {
 	IncludeResolved bool
 	PriorityOnly    string
+	IncludeDiff     bool
+	IncludeTimes    bool
+	AllComments     bool
 }
 
 // Compactor transforms threads into prioritized inbox items.
@@ -51,6 +54,17 @@ func (c *Compactor) Compact(threads []model.Thread) []model.InboxItem {
 			Resolved:   thread.Resolved,
 		}
 
+		if c.options.IncludeDiff {
+			item.DiffHunk = thread.DiffHunk
+		}
+		if c.options.IncludeTimes {
+			item.RootCreatedAt = root.CreatedAt
+			item.LatestCreatedAt = latest.CreatedAt
+		}
+		if c.options.AllComments {
+			item.Comments = copyComments(thread.Comments, c.options.IncludeTimes)
+		}
+
 		if c.options.PriorityOnly != "" && item.Priority != c.options.PriorityOnly {
 			continue
 		}
@@ -66,6 +80,17 @@ func (c *Compactor) Compact(threads []model.Thread) []model.InboxItem {
 	})
 
 	return items
+}
+
+func copyComments(comments []model.Comment, includeTimes bool) []model.Comment {
+	out := make([]model.Comment, 0, len(comments))
+	for _, c := range comments {
+		if !includeTimes {
+			c.CreatedAt = ""
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 func determinePriority(thread model.Thread, body string) string {

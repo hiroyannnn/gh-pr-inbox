@@ -36,7 +36,37 @@ func Markdown(meta *model.PRMeta, items []model.InboxItem) string {
 		for _, item := range grouped[file] {
 			fmt.Fprintf(builder, "- [%s] L%d by %s — %s\n", item.Priority, item.LineNumber, item.Author, item.Summary)
 			fmt.Fprintf(builder, "  - Latest: %s\n", item.Latest)
+			if item.RootCreatedAt != "" {
+				fmt.Fprintf(builder, "  - Created: %s\n", item.RootCreatedAt)
+			}
+			if item.LatestCreatedAt != "" {
+				fmt.Fprintf(builder, "  - Updated: %s\n", item.LatestCreatedAt)
+			}
 			fmt.Fprintf(builder, "  - Link: %s\n", item.URL)
+
+			if item.DiffHunk != "" {
+				fmt.Fprintf(builder, "  - Diff:\n\n")
+				fmt.Fprintf(builder, "    ```diff\n")
+				for _, line := range strings.Split(strings.TrimRight(item.DiffHunk, "\n"), "\n") {
+					fmt.Fprintf(builder, "    %s\n", line)
+				}
+				fmt.Fprintf(builder, "    ```\n")
+			}
+
+			if len(item.Comments) > 0 {
+				fmt.Fprintf(builder, "  - Comments (%d):\n", len(item.Comments))
+				for _, c := range item.Comments {
+					body := truncate(c.Body, 220)
+					if c.CreatedAt != "" {
+						fmt.Fprintf(builder, "    - %s (%s): %s\n", c.Author, c.CreatedAt, body)
+					} else {
+						fmt.Fprintf(builder, "    - %s: %s\n", c.Author, body)
+					}
+					if c.URL != "" && c.URL != item.URL {
+						fmt.Fprintf(builder, "      - %s\n", c.URL)
+					}
+				}
+			}
 		}
 		builder.WriteString("\n")
 	}

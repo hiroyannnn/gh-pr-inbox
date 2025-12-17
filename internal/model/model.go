@@ -31,13 +31,17 @@ type Thread struct {
 
 // InboxItem is the compacted, prioritized representation of a thread.
 type InboxItem struct {
-	ThreadID   string `json:"threadId"`
-	Priority   string `json:"priority"`
-	FilePath   string `json:"filePath"`
-	LineNumber int    `json:"lineNumber"`
-	Author     string `json:"author"`
-	Summary    string `json:"summary"`
-	Latest     string `json:"latest"`
-	URL        string `json:"url"`
-	Resolved   bool   `json:"resolved"`
+	ThreadID        string    `json:"threadId"`
+	Priority        string    `json:"priority"`
+	FilePath        string    `json:"filePath"`
+	LineNumber      int       `json:"lineNumber"`
+	Author          string    `json:"author"`
+	Summary         string    `json:"summary"`
+	Latest          string    `json:"latest"`
+	RootCreatedAt   string    `json:"rootCreatedAt,omitempty"`
+	LatestCreatedAt string    `json:"latestCreatedAt,omitempty"`
+	DiffHunk        string    `json:"diffHunk,omitempty"`
+	Comments        []Comment `json:"comments,omitempty"`
+	URL             string    `json:"url"`
+	Resolved        bool      `json:"resolved"`
 }

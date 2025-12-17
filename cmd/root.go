@@ -24,6 +24,9 @@ var (
 	includeAll   bool
 	onlyP0       bool
 	budget       int
+	includeDiff  bool
+	includeTimes bool
+	allComments  bool
 	promptFile   string
 	promptInline string
 )
@@ -48,6 +51,9 @@ func init() {
 	rootCmd.Flags().BoolVar(&includeAll, "all", false, "Include resolved threads as well")
 	rootCmd.Flags().BoolVar(&onlyP0, "p0", false, "Show only P0 items")
 	rootCmd.Flags().IntVar(&budget, "budget", 0, "Limit number of threads (0 = unlimited)")
+	rootCmd.Flags().BoolVar(&includeDiff, "include-diff", false, "Include diff context for each thread")
+	rootCmd.Flags().BoolVar(&includeTimes, "include-times", false, "Include comment timestamps")
+	rootCmd.Flags().BoolVar(&allComments, "all-comments", false, "Include all comments for each thread (not just first/latest)")
 	rootCmd.Flags().StringVar(&promptFile, "prompt-file", "", "Optional prompt template file")
 	rootCmd.Flags().StringVar(&promptInline, "prompt", "", "Inline prompt template override")
 }
@@ -101,6 +107,9 @@ func runInbox(cmd *cobra.Command, args []string) error {
 	compactor := compact.New(compact.Options{
 		IncludeResolved: includeAll,
 		PriorityOnly:    priorityFilter(),
+		IncludeDiff:     includeDiff,
+		IncludeTimes:    includeTimes,
+		AllComments:     allComments,
 	})
 	items := compactor.Compact(threads)
 	if budget > 0 && len(items) > budget {
