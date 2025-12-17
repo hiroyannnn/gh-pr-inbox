@@ -128,6 +128,56 @@ func TestClient_GetIssueCommentThreads_IncludesAfterCursorOnSecondPage(t *testin
 	}
 }
 
+func TestClient_GetReviewThreads_AllowsNullAuthor(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	execGH = func(args ...string) ([]byte, error) {
+		return []byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"id":"t1","isResolved":false,"path":"a.go","line":1,"originalLine":0,"comments":{"nodes":[{"id":"c1","databaseId":1,"body":"b","author":null,"createdAt":"2025-01-01T00:00:00Z","url":"u","diffHunk":"@@\\n"}]}}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	threads, err := client.GetReviewThreads(123)
+	if err != nil {
+		t.Fatalf("GetReviewThreads: %v", err)
+	}
+	if len(threads) != 1 || len(threads[0].Comments) != 1 {
+		t.Fatalf("unexpected threads/comments: %+v", threads)
+	}
+	if threads[0].Comments[0].Author != "unknown" {
+		t.Fatalf("expected unknown author, got %q", threads[0].Comments[0].Author)
+	}
+}
+
+func TestClient_GetIssueCommentThreads_AllowsNullAuthor(t *testing.T) {
+	original := execGH
+	t.Cleanup(func() { execGH = original })
+
+	execGH = func(args ...string) ([]byte, error) {
+		return []byte(`{"data":{"repository":{"pullRequest":{"comments":{"nodes":[{"id":"c1","databaseId":1,"body":"b","author":null,"createdAt":"2025-01-01T00:00:00Z","url":"u"}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}}`), nil
+	}
+
+	client, err := NewClient("octo/repo")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	threads, err := client.GetIssueCommentThreads(123)
+	if err != nil {
+		t.Fatalf("GetIssueCommentThreads: %v", err)
+	}
+	if len(threads) != 1 || len(threads[0].Comments) != 1 {
+		t.Fatalf("unexpected threads/comments: %+v", threads)
+	}
+	if threads[0].Comments[0].Author != "unknown" {
+		t.Fatalf("expected unknown author, got %q", threads[0].Comments[0].Author)
+	}
+}
+
 func assertHasArg(t *testing.T, args []string, want string) {
 	t.Helper()
 	if !hasArg(args, want) {
