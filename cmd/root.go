@@ -65,6 +65,12 @@ func init() {
 }
 
 func runInbox(cmd *cobra.Command, args []string) error {
+	repoRoot, _ := os.Getwd()
+	cfg, err := config.Load(repoRoot)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
 	var updateCh <-chan string
 	if !noUpdateCheck {
 		// Start this early so it can run in the background while we fetch PR data.
@@ -72,13 +78,17 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		updateCh = updatecheck.Start(buildinfo.Version)
 	}
 
+	prFromArg := false
 	if len(args) > 0 {
 		var err error
 		prNumber, err = strconv.Atoi(args[0])
 		if err != nil {
 			return fmt.Errorf("invalid PR number '%s': must be a valid integer", args[0])
 		}
+		prFromArg = true
 	}
+
+	applyConfigDefaults(cmd, cfg, prFromArg)
 
 	if prNumber == 0 {
 		var err error
@@ -94,12 +104,6 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("repository required: specify with --repo flag or run from a git repository")
 		}
-	}
-
-	repoRoot, _ := os.Getwd()
-	cfg, err := config.Load(repoRoot)
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	client, err := github.NewClient(repository)
@@ -159,6 +163,48 @@ func runInbox(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Print(prompt)
 		return nil
+	}
+}
+
+func applyConfigDefaults(cmd *cobra.Command, cfg *config.Config, prFromArg bool) {
+	flags := cmd.Flags()
+	d := cfg.Defaults
+
+	if !prFromArg && !flags.Changed("pr") && prNumber == 0 && d.PR != 0 {
+		prNumber = d.PR
+	}
+	if !flags.Changed("repo") && repository == "" && d.Repo != "" {
+		repository = d.Repo
+	}
+	if !flags.Changed("format") && d.Format != "" {
+		format = d.Format
+	}
+	if !flags.Changed("all") {
+		includeAll = d.All
+	}
+	if !flags.Changed("p0") {
+		onlyP0 = d.P0
+	}
+	if !flags.Changed("budget") {
+		budget = d.Budget
+	}
+	if !flags.Changed("include-diff") {
+		includeDiff = d.IncludeDiff
+	}
+	if !flags.Changed("include-times") {
+		includeTimes = d.IncludeTimes
+	}
+	if !flags.Changed("all-comments") {
+		allComments = d.AllComments
+	}
+	if !flags.Changed("include-issue-comments") {
+		includeIssue = d.IncludeIssueComment
+	}
+	if !flags.Changed("no-update-check") {
+		noUpdateCheck = d.NoUpdateCheck
+	}
+	if !flags.Changed("prompt-file") && promptFile == "" && cfg.PromptFile != "" {
+		promptFile = cfg.PromptFile
 	}
 }
 

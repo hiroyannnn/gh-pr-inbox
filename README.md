@@ -51,6 +51,38 @@ gh pr-inbox --repo owner/repo --pr 123
 gh pr-inbox --format json
 ```
 
+## Configuration
+
+You can set defaults for any CLI option via YAML config files (CLI flags always override config).
+
+Config files are loaded in this order (later files override earlier ones):
+
+1. `~/.config/gh/pr-inbox.yml`
+2. `.github/pr-inbox.yml` (in the current repository)
+
+Example:
+
+```yaml
+defaults:
+  repo: owner/repo
+  pr: 123
+  format: md
+  all: false
+  p0: false
+  budget: 0
+  include_diff: false
+  include_times: false
+  all_comments: false
+  include_issue_comments: false
+  no_update_check: false
+
+prompt: |
+  {{THREADS_MD}}
+
+# Optional: default prompt file path (can still be overridden with --prompt-file)
+prompt_file: ~/.config/gh/pr-inbox-prompt.txt
+```
+
 ### Update notice
 
 By default, `gh pr-inbox` checks for a newer release asynchronously and prints an upgrade hint to stderr when available (it does not block the main command output).
