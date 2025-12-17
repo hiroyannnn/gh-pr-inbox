@@ -33,6 +33,19 @@ func TestParseSemverTag(t *testing.T) {
 		t.Fatalf("unexpected semver for build metadata: %+v", v)
 	}
 
+	if _, ok := parseSemverTag("v-1.0.0"); ok {
+		t.Fatalf("expected negative major to fail")
+	}
+	if _, ok := parseSemverTag("v1.-2.3"); ok {
+		t.Fatalf("expected negative minor to fail")
+	}
+	if _, ok := parseSemverTag("v1.2.-3"); ok {
+		t.Fatalf("expected negative patch to fail")
+	}
+	if _, ok := parseSemverTag("v01.02.03"); ok {
+		t.Fatalf("expected leading zeros to fail")
+	}
+
 	if _, ok := parseSemverTag("1.2.3"); ok {
 		t.Fatalf("expected non-v tag to fail")
 	}
@@ -98,6 +111,39 @@ func TestCheckOnce_SkipsDevBuild(t *testing.T) {
 	}
 	if called {
 		t.Fatalf("expected no gh call for dev")
+	}
+}
+
+func TestCheckOnce_SkipsEmptyVersion(t *testing.T) {
+	orig := execGH
+	t.Cleanup(func() { execGH = orig })
+
+	called := false
+	execGH = func(ctx context.Context, args ...string) ([]byte, error) {
+		called = true
+		return []byte("v9.9.9\n"), nil
+	}
+
+	msg, err := checkOnce("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg != "" {
+		t.Fatalf("expected empty message, got %q", msg)
+	}
+	if called {
+		t.Fatalf("expected no gh call for empty version")
+	}
+
+	msg, err = checkOnce("   ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msg != "" {
+		t.Fatalf("expected empty message, got %q", msg)
+	}
+	if called {
+		t.Fatalf("expected no gh call for whitespace version")
 	}
 }
 

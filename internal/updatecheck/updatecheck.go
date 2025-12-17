@@ -116,6 +116,10 @@ func parseSemverTag(tag string) (semver, bool) {
 		return semver{}, false
 	}
 
+	if hasLeadingZeros(parts[0]) || hasLeadingZeros(parts[1]) || hasLeadingZeros(parts[2]) {
+		return semver{}, false
+	}
+
 	major, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return semver{}, false
@@ -128,7 +132,17 @@ func parseSemverTag(tag string) (semver, bool) {
 	if err != nil {
 		return semver{}, false
 	}
+	if major < 0 || minor < 0 || patch < 0 {
+		return semver{}, false
+	}
 	return semver{major: major, minor: minor, patch: patch}, true
+}
+
+func hasLeadingZeros(s string) bool {
+	if len(s) <= 1 {
+		return false
+	}
+	return strings.HasPrefix(s, "0")
 }
 
 func compareSemver(a, b semver) int {
