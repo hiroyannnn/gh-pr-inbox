@@ -3,6 +3,8 @@ MODULE_FILES := go.mod go.sum
 GOCACHE ?= $(CURDIR)/.cache/go-build
 GOMODCACHE ?= $(CURDIR)/.cache/go-mod
 GOENV := env GOCACHE="$(GOCACHE)" GOMODCACHE="$(GOMODCACHE)"
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X github.com/hiroyannnn/gh-pr-inbox/internal/buildinfo.Version=$(VERSION)
 
 .PHONY: all clean help fmt fmt-check tidy tidy-check vet test lint build ci install-local reinstall-local reinstall-prod release delete-tag
 
@@ -41,7 +43,7 @@ test: ## Run tests
 lint: fmt-check vet ## Run linters
 
 build: ## Build the binary
-	$(GOENV) go build -o gh-pr-inbox .
+	$(GOENV) go build -ldflags "$(LDFLAGS)" -o gh-pr-inbox .
 
 ci: tidy-check lint test ## Run CI tasks
 
