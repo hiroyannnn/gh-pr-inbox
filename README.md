@@ -1,10 +1,10 @@
 # gh-pr-inbox
 
-A GitHub CLI extension that collects PR review comments, groups them into threads, filters unresolved issues, prioritizes them, and outputs a clean, actionable "Inbox" for the PR author.
+A GitHub CLI extension that extracts unresolved PR review comments, prioritizes them, and outputs a clean format optimized for LLM/AI agent consumption.
 
 ## Purpose
 
-Reduce review noise and make it easy to decide what to fix next in your pull requests.
+Make it easy to feed PR review comments to LLMs like Claude Code or Cursor Agent. The tool filters out resolved threads, assigns priority levels (P0/P1/P2), and outputs Markdown or JSON that's ready to use as prompt input.
 
 ## Installation
 
@@ -29,12 +29,14 @@ go build -o gh-pr-inbox .
 ## Usage
 
 ### View inbox for current PR (from PR branch)
+
 ```bash
 gh pr-inbox
 gh pri
 ```
 
 ### View inbox for specific PR
+
 ```bash
 gh pr-inbox 123
 # or
@@ -42,14 +44,84 @@ gh pr-inbox --pr 123
 ```
 
 ### View inbox for PR in specific repository
+
 ```bash
 gh pr-inbox --repo owner/repo --pr 123
 ```
 
 ### Output as JSON
+
 ```bash
 gh pr-inbox --format json
 ```
+
+### Pipe to LLM
+
+```bash
+gh pr-inbox | claude "Fix these review comments"
+```
+
+## Example Output
+
+Default output is Markdown, grouped by file:
+
+```markdown
+# PR Inbox for owner/repo #123
+
+[Fix authentication bug](https://github.com/owner/repo/pull/123)
+
+> PR description text here
+
+Summary: P0 1 | P1 2 | P2 1
+
+Hot files: src/auth.go (2), cmd/root.go (1)
+
+## src/auth.go
+
+- [P0] L45 by reviewer1 — This has a potential security vulnerability
+  - Latest: We should sanitize user input here
+  - Link: https://github.com/owner/repo/pull/123#discussion_r123456789
+
+- [P1] L120 by reviewer2 — This logic seems complex, can we simplify?
+  - Latest: Consider extracting this into a separate function
+  - Link: https://github.com/owner/repo/pull/123#discussion_r123456790
+
+## internal/util.go
+
+- [P2] L30 by reviewer3 — nit: consider using a more descriptive variable name
+  - Latest: Maybe rename 'x' to 'userCount'?
+  - Link: https://github.com/owner/repo/pull/123#discussion_r123456791
+```
+
+## Features
+
+- **Thread Grouping**: Automatically groups review comments into conversation threads
+- **Unresolved Filtering**: Only shows threads not marked as resolved via GitHub's "Resolve conversation" feature
+- **Smart Prioritization**: Categorizes comments as P0, P1, or P2 based on keywords
+  - P0 (high): must, block, blocking, security, crash, bug, failure, incorrect
+  - P2 (low): nit, nitpick, style, optional, suggest, tiny
+  - P1 (medium): everything else, or threads with 5+ comments
+- **LLM-Ready Output**: Markdown format optimized for LLM consumption
+- **JSON Export**: Machine-readable output for programmatic use
+- **Prompt Templates**: Embed output into custom prompts
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--pr`, `-p` | PR number | Current branch's PR |
+| `--repo`, `-R` | Repository (owner/repo) | Current repository |
+| `--format`, `-f` | Output format (md/json) | md |
+| `--all` | Include resolved threads | false |
+| `--p0` | Show only P0 items | false |
+| `--budget` | Limit number of threads (0 = unlimited) | 0 |
+| `--include-diff` | Include diff context | false |
+| `--include-times` | Include timestamps | false |
+| `--all-comments` | Include all comments in thread | false |
+| `--include-issue-comments` | Include PR conversation comments | false |
+| `--no-update-check` | Disable update check | false |
+| `--prompt-file` | Path to prompt template file | - |
+| `--prompt` | Inline prompt template | - |
 
 ## Configuration
 
@@ -64,87 +136,38 @@ Example:
 
 ```yaml
 defaults:
-  repo: owner/repo
-  pr: 123
   format: md
-  all: false
-  p0: false
-  budget: 0
-  include_diff: false
-  include_times: false
-  all_comments: false
-  include_issue_comments: false
-  no_update_check: false
+  include_diff: true
+  all_comments: true
+  no_update_check: true
 
 prompt: |
+  Please fix the following review comments:
+
   {{THREADS_MD}}
 
-# Optional: default prompt file path (can still be overridden with --prompt-file)
 prompt_file: ~/.config/gh/pr-inbox-prompt.txt
 ```
 
-### Update notice
+### Prompt Template Variables
 
-By default, `gh pr-inbox` checks for a newer release asynchronously and prints an upgrade hint to stderr when available (it does not block the main command output).
-
-```bash
-gh pr-inbox --no-update-check
-```
-
-### More details (diff/timestamps/all comments)
-```bash
-gh pr-inbox --include-diff --include-times --all-comments
-```
-
-### Include PR conversation comments
-```bash
-gh pr-inbox --include-issue-comments
-```
-
-## Features
-
-- **Thread Grouping**: Automatically groups review comments into conversation threads
-- **Unresolved Filtering**: Only shows comments that haven't been marked as resolved/fixed/done
-- **Smart Prioritization**: Categorizes comments as HIGH 🔴, MEDIUM 🟡, or LOW 🟢 based on keywords
-  - HIGH: bug, error, security, critical, blocking, broken
-  - LOW: nit, minor, suggestion, optional, style
-  - MEDIUM: everything else
-- **Clean Output**: Displays an organized, easy-to-scan inbox view
-- **JSON Export**: Machine-readable output for integration with other tools
-
-## Example Output
-
-```
-📬 PR Review Inbox (3 items)
-============================================================
-
-[1] 🔴 HIGH
-    Thread: 123456789
-    File: src/main.go:45
-    Author: reviewer1
-    Comment: This has a potential security vulnerability - we should sanitize...
-    Thread has 2 unresolved comments
-
-[2] 🟡 MEDIUM
-    Thread: 123456790
-    File: cmd/root.go:120
-    Author: reviewer2
-    Comment: This logic seems complex, can we simplify?
-
-[3] 🟢 LOW
-    Thread: 123456791
-    File: internal/util.go:30
-    Author: reviewer3
-    Comment: nit: consider using a more descriptive variable name
-```
+| Variable | Content |
+|----------|---------|
+| `{{REPO}}` | Repository name (owner/repo) |
+| `{{PR_NUMBER}}` | PR number |
+| `{{PR_TITLE}}` | PR title |
+| `{{PR_URL}}` | PR URL |
+| `{{PR_GOAL}}` | PR description |
+| `{{THREADS_MD}}` | Markdown formatted threads |
+| `{{THREADS_JSON}}` | JSON formatted threads |
 
 ## How It Works
 
 1. Fetches PR details and all review comments using GitHub CLI (`gh`)
 2. Groups comments into threads based on reply relationships
-3. Filters out threads that contain resolution indicators (✅, "resolved", "fixed", "done", etc.)
-4. Prioritizes remaining threads based on content analysis
-5. Displays results in an organized, actionable format
+3. Filters out threads marked as resolved via GitHub's "Resolve conversation"
+4. Prioritizes remaining threads based on keyword analysis
+5. Outputs results in Markdown or JSON format
 
 ## Requirements
 
