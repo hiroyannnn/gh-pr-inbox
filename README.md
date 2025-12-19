@@ -57,8 +57,14 @@ gh pr-inbox --format json
 
 ### Pipe to LLM
 
+Pipe the output to any LLM CLI tool (e.g., [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli), or [aichat](https://github.com/sigoden/aichat)):
+
 ```bash
+# Example with Claude Code (requires: npm install -g @anthropic-ai/claude-code)
 gh pr-inbox | claude "Fix these review comments"
+
+# Example with other LLM tools
+gh pr-inbox | your-llm-cli "Fix these review comments"
 ```
 
 ## Example Output
@@ -100,10 +106,11 @@ Hot files: src/auth.go (2), cmd/root.go (1)
 - **Smart Prioritization**: Categorizes comments as P0, P1, or P2 based on keywords
   - P0 (high): must, block, blocking, security, crash, bug, failure, incorrect
   - P2 (low): nit, nitpick, style, optional, suggest, tiny
-  - P1 (medium): everything else, or threads with 5+ comments
+  - P1 (medium): everything else
+  - Note: Threads with 5+ comments are promoted to P1 (indicating active discussion)
 - **LLM-Ready Output**: Markdown format optimized for LLM consumption
 - **JSON Export**: Machine-readable output for programmatic use
-- **Prompt Templates**: Embed output into custom prompts
+- **Prompt Templates**: Wrap the output in custom prompt text using `--prompt` or `--prompt-file`. Supports template variables like `{{THREADS_MD}}` to embed the review comments (see [Prompt Template Variables](#prompt-template-variables) for details)
 
 ## Options
 
@@ -132,21 +139,21 @@ Config files are loaded in this order (later files override earlier ones):
 1. `~/.config/gh/pr-inbox.yml`
 2. `.github/pr-inbox.yml` (in the current repository)
 
-Example:
+Example (customize based on your workflow):
 
 ```yaml
 defaults:
-  format: md
-  include_diff: true
-  all_comments: true
-  no_update_check: true
+  format: md           # output format (md or json)
+  # include_diff: true   # uncomment to include diff context (default: false)
+  # all_comments: true   # uncomment to show all comments in thread (default: false)
+  no_update_check: true  # disable update check
 
 prompt: |
   Please fix the following review comments:
 
   {{THREADS_MD}}
 
-prompt_file: ~/.config/gh/pr-inbox-prompt.txt
+# prompt_file: ~/.config/gh/pr-inbox-prompt.txt  # alternative: load prompt from file
 ```
 
 ### Prompt Template Variables
